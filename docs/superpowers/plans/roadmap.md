@@ -38,3 +38,7 @@ A fresh migrated SQLite database completed the restore and reconciliation drill 
 - Performance and operations shipped in `ba0d731`. The GitHub regression jobs passed in run 45358558500. The local suite then passed 103 tests in 18.321 seconds after the legacy migration regression was added.
 - Commit `4c6daff` completed the Phase 3 verification. GitHub Actions run 45359433993 passed both Python matrix jobs and the Chromium job, which exercised the mobile trainer, coordinator and trainee flows. The browser simulated camera denial and a network failure. A physical camera and non-Chromium engines remain outside this check.
 - The deployed-app candidate uses Django templates and JavaScript for the frontend. A separate synthetic dashboard comparison previews vanilla JavaScript and React enhancement for review before React adoption.
+
+## Integrated normal dashboard and QR follow-up
+
+The chosen vanilla JavaScript preview is integrated into the real Django shell, dashboard and certificate review in ebcb60d. All counts and actions use real register data. Local verification passed 107 Django tests and eight JavaScript tests, with no migration drift. QR fixes in c992df2 cover frame readiness, camera cleanup and manual-save concurrency. Commit 1bd08ae verifies API batch, date and trainer boundaries. Commit 8a4453a adds successful decoding of a generated badge through a synthetic camera with real jsQR; its Chromium CI run passed. Physical camera hardware remains unverified.
