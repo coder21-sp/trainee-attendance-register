@@ -67,5 +67,6 @@ class DatabaseIntegrityTests(TestCase):
         approval = self.create_approval(attended=0, total=1, threshold=0)
         self.assertEqual(approval.attended, 0)
         self.assertEqual(approval.threshold, 0)
-        mark = Attendance.objects.create(trainee=self.trainee, session=self.session)
+        unapproved = Trainee.objects.get_or_create(batch=self.other, name="Boundary trainee", code="IT-2")[0]
+        mark = Attendance.objects.create(trainee=unapproved, session=self.other_session)
         self.assertIsNotNone(mark.pk)
