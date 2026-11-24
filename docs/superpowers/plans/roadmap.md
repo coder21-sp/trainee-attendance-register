@@ -9,7 +9,7 @@
 
 - [x] Phase 1. Verified independent reconciliation, migrated restore and database write protection, and six concurrent workflows. Commits `ccbbf02` and `7d2e5c1` are on the feature branch.
 - [x] Phase 2. Verified least-privilege coordinator permissions, shared application/admin login throttling, production HTTPS defaults, and private response caching.
-- [ ] Phase 3. GitHub Actions on Python 3.12 and 3.13 is verified. Browser verification is tracked below.
+- [x] Phase 3. Verified regression CI on Python 3.12 and 3.13, legacy migration, JavaScript behavior, and the Chromium workflow.
 - [x] Phase 4. Shipped server-rendered trainee progress, coordinator review controls and search, responsive trainer flows, and a certificate layout update in `f8861d3`.
 - [x] Phase 5. Measured and optimized the main endpoints, added polling backoff, verified health and backups, and documented SQLite operating limits and the PostgreSQL migration conditions.
 
@@ -35,3 +35,6 @@ A fresh migrated SQLite database completed the restore and reconciliation drill 
 - The exact staged Phase 4 snapshot passed all 91 Django tests in 8.538 seconds. Certificate reference and historical snapshot fields are retained. Dates display in the register timezone.
 - The same-template synthetic benchmark reduced coordinator review from 395 to seven SQL queries and from 187.78 ms to 23.90 ms median. Visible-tab polling drops from 30 to 12 scheduled requests per minute. The README records the other endpoints and measurement conditions.
 - A synthetic file-backed drill applied migrations through 0011, created a verified backup, restored to a separate file, and reconciled against the independent backup. The backup command rejects unrelated SQLite files. Readiness returns a generic 503 for quarantine or unavailable required database state. Production load testing and PostgreSQL compatibility remain outside the verified evidence.
+- Performance and operations shipped in `ba0d731`. The GitHub regression jobs passed in run 45358558500. The local suite then passed 103 tests in 18.321 seconds after the legacy migration regression was added.
+- Commit `4c6daff` completed the Phase 3 verification. GitHub Actions run 45359433993 passed both Python matrix jobs and the Chromium job, which exercised the mobile trainer, coordinator and trainee flows. The browser simulated camera denial and a network failure. A physical camera and non-Chromium engines remain outside this check.
+- The deployed-app candidate uses Django templates and JavaScript for the frontend. A separate synthetic dashboard comparison previews vanilla JavaScript and React enhancement for review before React adoption.
