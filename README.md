@@ -84,6 +84,14 @@ For hosting use a persistent volume for `DATABASE_PATH`, set `APP_ENV=production
 
 Tests cover role boundaries, repeat scans, correction history, pending registers, attendance thresholds, private trainee feeds and certificate downloads. Camera decoding uses jsQR 1.4.0; its license is included under training/static/vendor.
 
+GitHub Actions runs the Django suite on Python 3.12 and 3.13, validates the migration graph, checks JavaScript, and runs a separate Chromium workflow. To run the browser workflow locally:
+
+    python -m pip install -r requirements-browser.txt
+    python -m playwright install chromium
+    python manage.py test training.browser_checks
+
+The browser workflow starts a loopback server with a fresh fixture database. It exercises mobile manual attendance, simulated camera denial and network failures, correction and closure, coordinator approval, private certificate downloads and the recovery banner. Set `REGISTER_BROWSER_CHANNEL=msedge` to use an installed Microsoft Edge browser.
+
 ## Manual attendance and audit review
 
 For a typed trainee ID, select **QR Camera Issue**, **Medical Leave**, **Official Plant Duty**, **Network Error**, or **Roster Correction**. Add a note of up to 240 characters if needed. Camera scanning submits the badge UUID through the scan path; the printed trainee ID is accepted only through manual entry. Badge possession is not proof that a physical camera was used.
