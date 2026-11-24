@@ -3,9 +3,8 @@
 {% block content %}
 <section class="login-layout" aria-labelledby="login-heading">
   <div class="login-intro">
-    <p class="login-eyebrow">YOUR TRAINING WORKSPACE</p>
-    <h1>Every session.<br>Every milestone.</h1>
-    <p class="login-lead">Your attendance, progress and certificates in one place.</p>
+    <h1>Training attendance</h1>
+    <p class="login-lead">Check your attendance and certificates, or open a session register.</p>
     <dl class="login-roles">
       <div><dt>Trainees</dt><dd>Track your progress and download approved certificates.</dd></div>
       <div><dt>Trainers</dt><dd>Open your registers and record attendance.</dd></div>
@@ -14,8 +13,8 @@
   </div>
   <div class="login-card">
     <div class="login-card-heading">
-      <h2 id="login-heading">Welcome back</h2>
-      <p>Sign in with your training account.</p>
+      <h2 id="login-heading">Sign in</h2>
+      <p>Use the account provided by your coordinator.</p>
     </div>
     <form method="post" class="login-form">
       {% csrf_token %}

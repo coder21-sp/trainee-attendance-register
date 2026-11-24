@@ -6,7 +6,6 @@
     <h1>Training sessions</h1>
     <p>{% if perms.training.coordinate_register %}Open session registers or choose a batch for certificate review.{% else %}Open an assigned session to record or review attendance.{% endif %}</p>
   </div>
-  <a class="register-link register-link-primary" href="#session-registers">Session registers</a>
 </div>
 
 {% if perms.training.coordinate_register %}

@@ -42,3 +42,7 @@ A fresh migrated SQLite database completed the restore and reconciliation drill 
 ## Integrated normal dashboard and QR follow-up
 
 The chosen vanilla JavaScript preview is integrated into the real Django shell, dashboard and certificate review in ebcb60d. All counts and actions use real register data. Local verification passed 107 Django tests and eight JavaScript tests, with no migration drift. QR fixes in c992df2 cover frame readiness, camera cleanup and manual-save concurrency. Commit 1bd08ae verifies API batch, date and trainer boundaries. Commit 8a4453a adds successful decoding of a generated badge through a synthetic camera with real jsQR; its Chromium CI run passed. Physical camera hardware remains unverified.
+
+## November 25 interface refinement
+
+Refined the shared interface with warm cream, navy, muted blue and a terracotta login accent. Removed decorative gradients and slogan copy; retained Django forms and role-based workflows. Local login and workflow regression: 14 tests passed. Browser visual inspection is not included in this check. The refreshed local demo runs on port 8012 because the existing instance caches templates.
