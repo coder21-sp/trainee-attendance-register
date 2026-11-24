@@ -10,6 +10,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_safe
 
 from .models import AuditEntry
+from .roles import is_coordinator
 
 WARNING = "Reconciliation required: restored records may be incomplete. Attendance and approvals are locked."
 RECONCILED = "Recovery reconciled"
@@ -67,6 +68,6 @@ def recovery_conflict():
 @login_required
 @require_safe
 def review_recovery(request):
-    if not request.user.is_superuser:
+    if not is_coordinator(request.user):
         raise PermissionDenied
     return render(request, "recovery_review.html", {"marker": pending_restore()})

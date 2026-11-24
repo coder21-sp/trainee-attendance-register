@@ -1,7 +1,6 @@
 import csv
 import json
 
-from django.contrib.auth.decorators import user_passes_test
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -9,6 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_safe
 
 from .models import AuditEntry
+from .roles import coordinator_required, is_coordinator
 
 REASONS = ("QR Camera Issue", "Medical Leave", "Official Plant Duty", "Network Error", "Roster Correction")
 HEADINGS = ("Timestamp (IST)", "Trainee Name", "Session/Action", "Changed By", "Reason", "Note")
@@ -23,7 +23,7 @@ def explanation(post):
 def record_event(*, user, batch, action, label, source, previous, new,
                  trainee=None, session=None, details=None):
     """Append structured evidence in the existing receipt-covered context."""
-    role = "Coordinator" if user.is_superuser else "Trainer"
+    role = "Coordinator" if is_coordinator(user) else "Trainer"
     payload = {
         "version": 1, "action": action, "source": source,
         "actor_id": user.pk, "actor_role": role, "batch_id": batch.pk,
@@ -46,7 +46,7 @@ def cells(entry):
             entry.trainee_name, entry.context, entry.actor, entry.reason, entry.note)
 
 
-@user_passes_test(lambda user: user.is_superuser)
+@coordinator_required
 @require_safe
 def audit_log(request, export=False):
     entries = AuditEntry.objects.all()

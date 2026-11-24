@@ -7,8 +7,8 @@
 
 ## Milestones
 
-- [ ] Phase 1. Replace attestation-only unlock with a comparison against independently held SQLite evidence. Verify migration, restore, database write protection, and concurrent workflows.
-- [ ] Phase 2. Verify the authorization matrix and implement least privilege, login protection, deployment settings, and privacy controls. Run a dependency audit.
+- [x] Phase 1. Verified independent reconciliation, migrated restore and database write protection, and six concurrent workflows. Commits `ccbbf02` and `7d2e5c1` are on the feature branch.
+- [x] Phase 2. Verified least-privilege coordinator permissions, shared application/admin login throttling, production HTTPS defaults, and private response caching.
 - [ ] Phase 3. Add CI, regression coverage, and browser validation.
 - [ ] Phase 4. Improve coordinator, trainer, and trainee workflows and certificates. Verify desktop, mobile, and keyboard behavior.
 - [ ] Phase 5. Measure load, optimize bottlenecks, evaluate database options, and verify health checks and backup procedures.
@@ -20,3 +20,11 @@ An operator selects an intact SQLite snapshot held independently of the restored
 The attestation regression failed on the upstream redirect and passed after the review page became read-only. The independent comparison then passed 13 focused recovery tests and the 57-test suite in 7.645 seconds at `ccbbf02`, with clean system, migration drift, and diff checks. The host operator's access and separate evidence custody establish provenance.
 
 Migration 0009 uses the same pending-recovery view for application status and SQLite write guards. The guards cover batch, trainee, session, attendance, approval, and correction inserts, updates, and deletes. The database file and audit writers remain trusted. Six file-backed concurrency tests verify duplicate scans and approvals, closure versus scanning, correction versus approval, threshold changes versus approval, and quarantine versus scanning. The combined recovery and concurrency run passed 21 tests in 0.661 seconds.
+
+A fresh migrated SQLite database completed the restore and reconciliation drill with a synthetic operator. The full Phase 1 regression run passed 65 tests in 7.416 seconds before the final schema comparison tightening. The tightened comparison passed the 21 focused recovery and concurrency tests, including missing schema trigger rejection.
+
+## Security verification
+
+- The coordinator, login and HTTP security tests passed after their expected RED failures. The integrated suite passed 84 tests. The production deploy check reported W005 and W021 for the staged HSTS subdomain and preload policy.
+- `pip-audit 2.10.1` reported no known vulnerabilities in the eight pinned Python packages on 24 November 2026. The scan scope was the pinned Python requirements. The bundled jsQR file was outside that scan.
+- The setup administrator and host operator remain trusted. Login throttling does not track a username globally across distributed sources. Under reverse proxies, address isolation relies on the trusted server supplying the client address.

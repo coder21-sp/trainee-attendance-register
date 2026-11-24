@@ -36,8 +36,35 @@ if not SECRET_KEY and DEBUG:
     SECRET_KEY = key_file.read_text()
 if not SECRET_KEY:
     raise ValueError("Set SECRET_KEY for production")
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+
+def environment_list(name):
+    return [value.strip() for value in os.getenv(name, "").split(",") if value.strip()]
+
+
+ALLOWED_HOSTS = environment_list("ALLOWED_HOSTS")
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
+    raise ValueError("Set ALLOWED_HOSTS to specific hosts for production")
+
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = not DEBUG
+CSRF_TRUSTED_ORIGINS = environment_list("CSRF_TRUSTED_ORIGINS")
+SECURE_SSL_REDIRECT = not DEBUG
+try:
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURITY_HSTS_SECONDS", "0" if DEBUG else "300"))
+except ValueError as exc:
+    raise ValueError("SECURITY_HSTS_SECONDS must be a nonnegative integer") from exc
+if SECURE_HSTS_SECONDS < 0:
+    raise ValueError("SECURITY_HSTS_SECONDS must be a nonnegative integer")
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURITY_HSTS_INCLUDE_SUBDOMAINS") == "1"
+# Enable only when the proxy overwrites this header and is the app's sole ingress.
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if os.getenv("SECURITY_TRUST_PROXY_HTTPS") == "1"
+    else None
+)
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = LOGOUT_REDIRECT_URL = "/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -46,7 +73,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 INSTALLED_APPS = [
     'training',
-    'django.contrib.admin',
+    'training.admin_config.ThrottledAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -60,6 +87,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'training.middleware.private_responses',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

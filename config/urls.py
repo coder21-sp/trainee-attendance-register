@@ -6,6 +6,7 @@ from training import views
 from training.audit import audit_log
 from training.recovery import review_recovery
 from training.checkpoints import checkpoint
+from training.login_throttle import throttle_login
 
 urlpatterns = [
     path("recovery/review/", review_recovery, name="recovery-review"),
@@ -19,7 +20,7 @@ urlpatterns = [
     path('passes/<int:pk>/', views.id_pass, name='pass'),
     path('certificate/<int:pk>.pdf', views.certificate, name='certificate'),
     path('', views.home, name='home'),
-    path('login/', auth.LoginView.as_view(template_name='login.html'), name='login'),
+    path('login/', throttle_login(auth.LoginView.as_view(template_name='login.html')), name='login'),
     path('logout/', auth.LogoutView.as_view(), name='logout'),
     path('setup/', admin.site.urls),
     path('sessions/<int:pk>/', views.register, name='register'),

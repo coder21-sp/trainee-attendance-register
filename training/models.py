@@ -11,6 +11,7 @@ class Batch(models.Model):
     minimum_percent = models.PositiveSmallIntegerField(default=75, validators=[MaxValueValidator(100)])
 
     class Meta:
+        permissions = [("coordinate_register", "Can coordinate the training register")]
         constraints = [models.CheckConstraint(condition=models.Q(minimum_percent__gte=0, minimum_percent__lte=100), name="batch_threshold_range")]
 
     def __str__(self):
@@ -104,3 +105,9 @@ class AuditEntry(models.Model):
 
     class Meta:
         ordering = ['-timestamp', '-pk']
+
+
+class LoginAttemptBucket(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)

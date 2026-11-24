@@ -48,7 +48,17 @@ Open **http://127.0.0.1:8000/**. On Windows use `.venv\Scripts\activate`. The de
 
 ## Setting up your own batch
 
-In **Manage batches, trainees and sessions**, create a batch, add trainees and assign each session a date and trainer. For a trainer, create an ordinary Django user and assign them to sessions. For a trainee, create a separate ordinary user and select it in their trainee record. Coordinator accounts are trusted system administrators. Only assigned trainers can record attendance, and a trainee login can access only its own progress and PDF.
+In **Manage batches, trainees and sessions**, create a batch, add trainees and assign each session a date and trainer. Give operational coordinators the **Can coordinate the training register** permission through a Django group. Their accounts can remain ordinary users. Grant separate staff access and specific training-model permissions to people who maintain batches, trainees and sessions through setup. Reserve superusers for system administration and emergency access.
+
+| Role | Register access |
+|---|---|
+| Coordinator | All batches, passes, registers, reviews, approvals, audit records and certificates |
+| Assigned trainer | Registers for assigned sessions and corrections the register permits |
+| Linked trainee | Their own progress feed and approved certificate |
+| Setup staff | The setup models for which they have explicit Django permissions |
+| Superuser | System administration and coordinator access |
+
+Both sign-in forms share a 15-minute attempt window. The limits are five attempts per username and client address and 30 attempts per client address across usernames. Excess attempts receive HTTP 429 and a retry time. The application hashes the rate-limit keys and uses the web server's `REMOTE_ADDR`. Configure client addresses at the trusted server boundary if it otherwise supplies the proxy's shared address. Forwarded address headers from the request do not affect the limits.
 
 ## Connect a phone
 
@@ -66,7 +76,7 @@ On trusted Wi-Fi, set `ALLOWED_HOSTS=localhost,127.0.0.1,YOUR_PC_LAN_IP` and run
 
 SQLite transactions serialize register writes and approval decisions. A database uniqueness constraint prevents duplicate marks. Approval stores the reviewer, timestamp, threshold and attendance counts. A batch should contain a fixed cohort and planned sessions before final review.
 
-For hosting use a persistent volume for `DATABASE_PATH`, set `APP_ENV=production`, `SECRET_KEY` and `ALLOWED_HOSTS`, run migrations and `collectstatic`, serve static files and Gunicorn behind HTTPS. Back up the database. The development server is for local demos.
+For hosting use a persistent volume for `DATABASE_PATH`, set `APP_ENV=production`, `SECRET_KEY` and specific comma-separated `ALLOWED_HOSTS`, run migrations and `collectstatic`, and serve static files and Gunicorn behind HTTPS. Production redirects HTTP and uses secure cookies. Configure `CSRF_TRUSTED_ORIGINS` for explicitly trusted cross-origin submissions. Enable `SECURITY_TRUST_PROXY_HTTPS=1` only behind a trusted proxy that overwrites incoming `X-Forwarded-Proto` and blocks direct client access to the application server. HSTS starts at 300 seconds. Increase `SECURITY_HSTS_SECONDS` after confirming HTTPS stability and set `SECURITY_HSTS_INCLUDE_SUBDOMAINS=1` only after verifying every subdomain supports HTTPS. Django deployment warnings W005 and W021 reflect the staged subdomain and preload policy.
 
 ## Verification
 

@@ -12,6 +12,7 @@ from django.db import connection, transaction
 
 from training.models import AuditEntry
 from training.recovery import RECONCILED, marker_digest, pending_restore, valid_marker
+from training.roles import is_coordinator
 from .restore_with_audit import COLUMNS, TABLE
 
 
@@ -81,10 +82,8 @@ class Command(BaseCommand):
         note = opts["note"].strip()
         if not note or len(note) > 240:
             raise CommandError("Provide a review note of 1 to 240 characters.")
-        actor = get_user_model().objects.filter(
-            username=opts["actor"], is_active=True, is_superuser=True,
-        ).first()
-        if actor is None:
+        actor = get_user_model().objects.filter(username=opts["actor"], is_active=True).first()
+        if actor is None or not is_coordinator(actor):
             raise CommandError("An active coordinator is required.")
         marker = pending_restore()
         if marker is None:

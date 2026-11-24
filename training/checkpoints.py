@@ -2,7 +2,6 @@
 import hashlib
 import json
 
-from django.contrib.auth.decorators import user_passes_test
 from django.core import signing
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
@@ -10,11 +9,12 @@ from django.views.decorators.http import require_POST
 
 from .models import AuditEntry
 from .recovery import recovery_requires_review
+from .roles import coordinator_required
 
 SALT = "training.audit.receipt.v1"
 
 
-@user_passes_test(lambda user: user.is_superuser)
+@coordinator_required
 @require_POST
 @never_cache
 def checkpoint(request):

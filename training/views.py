@@ -1,4 +1,4 @@
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 from .audit import REASONS, explanation, record_event
@@ -13,24 +13,24 @@ import uuid
 from .models import Approval, Attendance, Batch, Session, Trainee
 from .certificates import render_certificate
 from .recovery import recovery_requires_review, recovery_conflict
-
-coordinator = user_passes_test(lambda user: user.is_superuser)
+from .roles import coordinator_required, is_coordinator
 
 
 @login_required
 def home(request):
     if Trainee.objects.filter(account=request.user).exists():
         return redirect("progress")
+    can_coordinate = is_coordinator(request.user)
     sessions = Session.objects.select_related("batch").order_by("-date","id")
-    if not request.user.is_superuser:
+    if not can_coordinate:
         sessions = sessions.filter(trainer=request.user)
-    return render(request, "home.html", {"sessions": sessions, "batches": Batch.objects.all() if request.user.is_superuser else []})
+    return render(request, "home.html", {"sessions": sessions, "batches": Batch.objects.all() if can_coordinate else []})
 
 
 @login_required
 @transaction.atomic
 def register(request, pk):
-    session = get_object_or_404(Session, pk=pk, **({} if request.user.is_superuser else {"trainer":request.user}))
+    session = get_object_or_404(Session, pk=pk, **({} if is_coordinator(request.user) else {"trainer":request.user}))
     if request.method == "POST":
         if recovery_requires_review():
             return recovery_conflict()
@@ -110,14 +110,14 @@ def evidence(trainee):
     return dict(total=total, pending=pending, attended=attended, eligible=total>0 and pending==0 and attended*100>=total*trainee.batch.minimum_percent)
 
 
-@coordinator
+@coordinator_required
 def review(request, pk):
     batch = get_object_or_404(Batch, pk=pk)
     rows = [(t,evidence(t)) for t in Trainee.objects.filter(batch=batch).select_related("batch","approval").order_by("name","code")]
     return render(request,"review.html",{"batch":batch,"rows":rows,"reasons":REASONS})
 
 
-@coordinator
+@coordinator_required
 @require_POST
 @transaction.atomic
 def approve(request, pk):
@@ -145,7 +145,7 @@ def approve(request, pk):
     return redirect("review",pk=trainee.batch_id)
 
 
-@coordinator
+@coordinator_required
 def badge(request, pk):
     trainee = get_object_or_404(Trainee,pk=pk)
     response = HttpResponse(content_type="image/svg+xml")
@@ -167,7 +167,7 @@ def live(request, batch_id=None):
         trainees = [trainee]
         batch = trainee.batch
     else:
-        if not request.user.is_superuser:
+        if not is_coordinator(request.user):
             return HttpResponse(status=403)
         batch = get_object_or_404(Batch, pk=batch_id)
         trainees = Trainee.objects.filter(batch=batch).select_related("batch","approval")
@@ -188,7 +188,7 @@ def live(request, batch_id=None):
         {"title":s.title,"status":"Present" if (s.pk,trainee.pk) in marks else "Absent" if s.closed else "Pending"} for s in sessions]})
 
 
-@coordinator
+@coordinator_required
 def id_pass(request, pk):
     return render(request,"pass.html",{"trainee":get_object_or_404(Trainee,pk=pk)})
 
@@ -196,7 +196,7 @@ def id_pass(request, pk):
 @login_required
 def certificate(request, pk):
     approval = get_object_or_404(Approval.objects.select_related("trainee__batch","reviewer"), trainee_id=pk)
-    if not request.user.is_superuser and approval.trainee.account_id != request.user.pk:
+    if not is_coordinator(request.user) and approval.trainee.account_id != request.user.pk:
         return HttpResponse(status=403)
     if recovery_requires_review():
         return recovery_conflict()
