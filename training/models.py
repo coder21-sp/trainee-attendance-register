@@ -10,6 +10,9 @@ class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
     minimum_percent = models.PositiveSmallIntegerField(default=75, validators=[MaxValueValidator(100)])
 
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(minimum_percent__gte=0, minimum_percent__lte=100), name="batch_threshold_range")]
+
     def __str__(self):
         return self.name
 
@@ -52,6 +55,13 @@ class Approval(models.Model):
     attended = models.PositiveIntegerField()
     total = models.PositiveIntegerField()
     threshold = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(threshold__gte=0, threshold__lte=100), name="approval_threshold_range"),
+            models.CheckConstraint(condition=models.Q(total__gt=0), name="approval_positive_total"),
+            models.CheckConstraint(condition=models.Q(attended__lte=models.F("total")), name="approval_attended_within_total"),
+        ]
 
 
 class Correction(models.Model):
