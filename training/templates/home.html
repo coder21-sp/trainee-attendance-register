@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}<h1>Training sessions</h1>
+{% if user.is_superuser %}<a href="/setup/">Manage batches, trainees and sessions</a>
+<h2>Certificate review</h2>{% for batch in batches %}<a class="row" href="{% url 'review' batch.pk %}">{{ batch }} <span>Review batch →</span></a>{% empty %}<p>Create a batch in setup to begin.</p>{% endfor %}{% endif %}
+<h2>Session registers</h2>{% for s in sessions %}<section class="row"><div><strong>{{ s.title }}</strong><p>{{ s.batch }} · {{ s.date }} · {{ s.trainer }}</p></div>
+{% if s.trainer_id == user.id %}<a href="{% url 'register' s.id %}">Open register</a>{% else %}<span>{% if s.closed %}Closed{% else %}Pending{% endif %}</span>{% endif %}</section>{% empty %}<p>No sessions assigned.</p>{% endfor %}{% endblock %}

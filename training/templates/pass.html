@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<article class="panel pass"><h1>Trainee ID pass</h1><img width="210" height="210" alt="Attendance QR code" src="{% url 'badge' trainee.pk %}"><h2>{{ trainee.name }}</h2><p>{{ trainee.batch }} · {{ trainee.code }}</p></article><button class="no-print" onclick="window.print()">Print pass</button>{% endblock %}

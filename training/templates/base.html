@@ -1,0 +1,5 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Training register{% endblock %}</title><link rel="stylesheet" href="{% static 'register.css' %}"></head>
+<body><header><a href="/">Training register</a>{% if user.is_authenticated %}<form method="post" action="/logout/">{% csrf_token %}<button>Sign out</button></form>{% endif %}</header><main>
+{% for message in messages %}<p role="status" class="notice">{{ message }}</p>{% endfor %}
+{% block content %}{% endblock %}</main></body></html>
