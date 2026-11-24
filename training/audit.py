@@ -1,4 +1,5 @@
 import csv
+import json
 
 from django.contrib.auth.decorators import user_passes_test
 from django.core.paginator import Paginator
@@ -19,11 +20,25 @@ def explanation(post):
     return (reason, note) if reason in REASONS and len(note) <= 240 else None
 
 
-def record(user, trainee, action, details, session=None):
+def record_event(*, user, batch, action, label, source, previous, new,
+                 trainee=None, session=None, details=None):
+    """Append structured evidence in the existing receipt-covered context."""
     role = "Coordinator" if user.is_superuser else "Trainer"
-    context = f"{trainee.batch} · {session} · {action}" if session else f"{trainee.batch} · {action}"
-    return AuditEntry.objects.create(trainee_name=str(trainee), context=context,
-                                     actor=f"{user.username} ({role})", reason=details[0], note=details[1])
+    payload = {
+        "version": 1, "action": action, "source": source,
+        "actor_id": user.pk, "actor_role": role, "batch_id": batch.pk,
+        "trainee_id": trainee.pk if trainee else None,
+        "session_id": session.pk if session else None,
+        "previous": previous, "new": new,
+    }
+    label_text = " · ".join(str(value) for value in (batch, session, label) if value is not None)
+    context = " ".join(label_text.splitlines()) + "\n" + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    reason, note = details or (label, "")
+    return AuditEntry.objects.create(
+        trainee_name=str(trainee) if trainee else "(Entire register)",
+        context=context, actor=f"{user.username} ({role})", reason=reason, note=note,
+    )
 
 
 def cells(entry):

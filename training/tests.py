@@ -37,7 +37,8 @@ class RegisterFlow(TestCase):
         self.assertFalse(Attendance.objects.filter(trainee=absent).exists())
         for status in ["present","absent"]:
             self.client.post(route, {"action":"correct","code":absent.code,"status":status,"reason":"Roster Correction"})
-        self.assertEqual(AuditEntry.objects.count(), 3)
+        self.assertEqual(AuditEntry.objects.count(), 4)
+        self.assertEqual(AuditEntry.objects.filter(context__contains='"action":"register_closed"').count(), 1)
         self.client.post(confirm)
         self.assertFalse(Approval.objects.exists())
         self.client.force_login(coordinator)
@@ -46,6 +47,7 @@ class RegisterFlow(TestCase):
         self.assertFalse(Approval.objects.exists())
         self.client.post(confirm)
         self.assertEqual(Approval.objects.get().attended, 1)
+        self.assertEqual(AuditEntry.objects.count(), 5)
 
     def test_trainee_private_progress_and_certificate(self):
         from django.core.management import call_command

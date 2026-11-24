@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.db import transaction
-from .audit import REASONS, explanation, record
+from .audit import REASONS, explanation, record_event
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -47,7 +47,11 @@ def register(request, pk):
                     Attendance.objects.create(session=session, trainee=trainee)
                 else:
                     existing.delete()
-                record(request.user, trainee, "Mark added" if present else "Mark removed", details, session)
+                record_event(user=request.user, batch=session.batch, trainee=trainee,
+                             session=session, action="attendance_corrected",
+                             label="Mark added" if present else "Mark removed",
+                             source="correction", previous=not present, new=present,
+                             details=details)
                 messages.success(request, "Correction recorded.")
             return redirect("register", pk=pk)
         if session.closed or session.date > timezone.localdate():
@@ -55,6 +59,9 @@ def register(request, pk):
         elif request.POST.get("action") == "close":
             session.closed = True
             session.save(update_fields=["closed"])
+            record_event(user=request.user, batch=session.batch, session=session,
+                         action="register_closed", label="Register closed",
+                         source="register", previous=False, new=True)
             messages.success(request, "Register closed. Unmarked trainees now count as absent.")
         else:
             value = request.POST.get("code","").strip()
@@ -76,8 +83,12 @@ def register(request, pk):
                 messages.error(request, "Unknown ID for this batch.")
             else:
                 _, created = Attendance.objects.get_or_create(session=session, trainee=trainee)
-                if created and not scanned:
-                    record(request.user, trainee, "Manual present mark", details, session)
+                if created:
+                    record_event(user=request.user, batch=session.batch, trainee=trainee,
+                                 session=session, action="attendance_marked",
+                                 label="QR present mark" if scanned else "Manual present mark",
+                                 source="qr" if scanned else "manual", previous=False,
+                                 new=True, details=None if scanned else details)
                 messages.success(request, f"{trainee.name}: " + ("present." if created else "already marked."))
         if request.headers.get("Accept") == "application/json":
             alerts = list(messages.get_messages(request))
@@ -114,9 +125,15 @@ def approve(request, pk):
     if override and (not details or result["eligible"] or result["pending"] or not result["total"]):
         messages.error(request, "Overrides require closed registers, below-threshold attendance and a selected reason.")
     elif result["eligible"] or override:
-        _, created = Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent, approval_method="override" if override else "standard", snapshot_origin="original"))
-        if created and override:
-            record(request.user, trainee, f"Certificate override ({result['attended']}/{result['total']}, threshold {trainee.batch.minimum_percent}%)", details)
+        approval, created = Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent, approval_method="override" if override else "standard", snapshot_origin="original"))
+        if created:
+            label = "Certificate override" if override else "Certificate approved"
+            record_event(user=request.user, batch=trainee.batch, trainee=trainee,
+                         action="certificate_approved", label=label,
+                         source="override" if override else "standard", previous=None,
+                         new={"approval_id": approval.pk, "attended": approval.attended,
+                              "total": approval.total, "threshold": approval.threshold},
+                         details=details if override else None)
         messages.success(request,"Certificate approval recorded.")
     else:
         messages.error(request,"Attendance is pending or below this batch's threshold.")
