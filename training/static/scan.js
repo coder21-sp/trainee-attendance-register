@@ -21,7 +21,6 @@ async function scanBadge() {
       const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
       const code = jsQR(frame.data,frame.width,frame.height);
       if (code) {
-
         await submitMark('scan', code.data);
         return;
       }
@@ -32,6 +31,7 @@ async function scanBadge() {
     statusLine.textContent = 'Camera unavailable. Enter the printed ID.';
   } finally {
     stream?.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
     video.hidden = true;
     scan.disabled = false;
   }
@@ -42,13 +42,15 @@ if (window.jsQR && navigator.mediaDevices?.getUserMedia) {
 }
 
 const form = document.querySelector('#entry');
+const codeInput = document.querySelector('#code');
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  submitMark('manual', document.querySelector('#code').value);
+  submitMark('manual', codeInput.value);
 });
 async function submitMark(source, code) {
   if (form.dataset.busy) return;
   form.dataset.busy = 'true';
+  statusLine.textContent = 'Saving attendance…';
   try {
     const data = new FormData(form);
     data.set('source', source);
@@ -61,18 +63,26 @@ async function submitMark(source, code) {
       statusLine.textContent = result.message;
       return;
     }
-    // Reload the server-rendered roster after the transaction commits.
-    sessionStorage.setItem('lastMark', result.message);
-    location.reload();
+    statusLine.textContent = result.message;
+    codeInput.value = '';
+    if (source === 'manual') codeInput.focus();
+    await refreshRoster();
   } catch {
     statusLine.textContent = 'Could not verify the mark. Retry the same ID to check.';
   } finally {
     delete form.dataset.busy;
   }
 }
-const lastMark = sessionStorage.getItem('lastMark');
-if (lastMark) {
-  statusLine.textContent = lastMark;
-  sessionStorage.removeItem('lastMark');
-  document.querySelector('#code').focus();
+
+async function refreshRoster() {
+  try {
+    const response = await fetch(document.location.href, {cache: 'no-store'});
+    if (!response.ok) throw new Error();
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const roster = page.querySelector('#present-roster');
+    if (!roster) throw new Error();
+    document.querySelector('#present-roster').replaceWith(roster);
+  } catch {
+    statusLine.textContent += ' Refresh the page to see the latest roster.';
+  }
 }

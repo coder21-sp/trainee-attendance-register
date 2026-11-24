@@ -1,9 +1,12 @@
+from datetime import datetime, timezone as utc_timezone
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
-from unittest.mock import patch
 
+from .certificates import render_certificate
 from .models import Approval, Attendance, Batch, Session, Trainee
 
 
@@ -73,3 +76,10 @@ class CertificateSnapshotTests(TestCase):
     def test_unrelated_user_cannot_download(self):
         self.client.force_login(get_user_model().objects.create(username="unrelated"))
         self.assertEqual(self.client.get(self.pdf_url).status_code, 403)
+
+    def test_certificate_uses_local_approval_date(self):
+        self.approval.approved_at = datetime(2026, 1, 10, 20, tzinfo=utc_timezone.utc)
+        with patch("reportlab.rl_config.pageCompression", 0):
+            pdf = render_certificate(self.approval)
+        self.assertIn(b"2026-01-11", pdf)
+        self.assertNotIn(b"2026-01-10", pdf)

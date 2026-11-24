@@ -1,3 +1,72 @@
-{% extends 'base.html' %}{% load static %}{% block content %}<a href="/">← Batches</a><h1>{{ batch }} review</h1><p>Approval requires {{ batch.minimum_percent }}% attendance and all registers closed. Counts below show confirmed attendance in closed registers out of all planned sessions.</p>
-<section data-feed="{% url 'batch-data' batch.pk %}" id="live"><h2>Live attendance</h2><p id="health" role="status"></p><div id="summary"></div><div id="counts"></div></section><script defer src="{% static 'live.js' %}"></script>{% for t,r in rows %}<section class="row"><div><strong>{{ t.name }}</strong><p>{{ t.code }} · {{ r.attended }}/{{ r.total }} sessions · {{ r.pending }} pending</p><a href="{% url 'pass' t.pk %}">Print ID pass</a></div>
-{% if t.approval %}<a href="{% url 'certificate' t.pk %}">Download certificate</a><span>Approved by {{ t.approval.reviewer }} · {{ t.approval.attended }}/{{ t.approval.total }} at approval</span>{% elif r.eligible %}<form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}<button>Approve certificate</button></form>{% elif r.pending or not r.total %}<span>Awaiting registers</span>{% else %}<details><summary>Below threshold · Review override</summary><form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}<input type="hidden" name="action" value="override">{% include "reason.html" %}<button>Override and approve</button></form></details>{% endif %}</section>{% empty %}<p>No trainees enrolled.</p>{% endfor %}{% endblock %}
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<a href="/">← Batches</a>
+<h1>{{ batch }} review</h1>
+<p>Approval requires {{ batch.minimum_percent }}% attendance and all registers closed. Counts below show confirmed attendance in closed registers out of all planned sessions.</p>
+<section data-feed="{% url 'batch-data' batch.pk %}" id="live">
+  <h2>Live attendance</h2>
+  <p id="health" role="status"></p>
+  <div id="summary"></div>
+  <div id="counts"></div>
+</section>
+<script defer src="{% static 'live.js' %}"></script>
+
+<h2>Trainee review</h2>
+{% if rows %}
+  <div id="review-filters" class="panel review-filters" hidden>
+    <div>
+      <label for="review-search">Find a trainee</label>
+      <input type="search" id="review-search" placeholder="Name or trainee ID" autocomplete="off">
+    </div>
+    {% if not recovery_required %}
+      <div>
+        <label for="review-status">Certificate status</label>
+        <select id="review-status">
+          <option value="">All statuses</option>
+          <option value="pending">Awaiting registers</option>
+          <option value="eligible">Eligible for approval</option>
+          <option value="below">Below threshold</option>
+          <option value="approved">Approved</option>
+        </select>
+      </div>
+    {% endif %}
+    <p id="review-results" role="status"></p>
+  </div>
+  <script defer src="{% static 'review.js' %}"></script>
+{% endif %}
+
+{% for t,r in rows %}
+  <section class="row" data-review-trainee="{{ t.name }} {{ t.code }}"
+           data-review-status="{% if recovery_required %}recovery{% elif t.approval %}approved{% elif r.eligible %}eligible{% elif r.pending or not r.total %}pending{% else %}below{% endif %}">
+    <div>
+      <strong>{{ t.name }}</strong>
+      <p>{{ t.code }} · {{ r.attended }}/{{ r.total }} sessions · {{ r.pending }} pending</p>
+      <a href="{% url 'pass' t.pk %}">Print ID pass</a>
+    </div>
+    {% if recovery_required %}
+      <span>Attendance under review</span>
+    {% elif t.approval %}
+      <a href="{% url 'certificate' t.pk %}">Download certificate</a>
+      <span>Approved by {{ t.approval.reviewer }} · {{ t.approval.attended }}/{{ t.approval.total }} at approval</span>
+    {% elif r.eligible %}
+      <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
+        <button>Approve certificate</button>
+      </form>
+    {% elif r.pending or not r.total %}
+      <span>Awaiting registers</span>
+    {% else %}
+      <details>
+        <summary>Below threshold · Review override</summary>
+        <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
+          <input type="hidden" name="action" value="override">
+          {% include 'reason.html' %}
+          <button>Override and approve</button>
+        </form>
+      </details>
+    {% endif %}
+  </section>
+{% empty %}
+  <p>No trainees enrolled.</p>
+{% endfor %}
+{% endblock %}

@@ -155,8 +155,29 @@ def badge(request, pk):
 
 @login_required
 def progress(request):
-    trainee = get_object_or_404(Trainee.objects.select_related("batch"), account=request.user)
-    return render(request, "progress.html", {"trainee":trainee})
+    trainee = get_object_or_404(Trainee.objects.select_related("batch", "approval"), account=request.user)
+    quarantined = recovery_requires_review()
+    context = {"trainee": trainee, "recovery_required": quarantined, "status": "Reconciliation required"}
+    if not quarantined:
+        sessions = list(Session.objects.filter(batch=trainee.batch).order_by("date", "pk"))
+        marked = set(Attendance.objects.filter(trainee=trainee).values_list("session_id", flat=True))
+        confirmed = sum(session.closed and session.pk in marked for session in sessions)
+        pending = sum(not session.closed for session in sessions)
+        approval = getattr(trainee, "approval", None)
+        if approval:
+            status = "Approved"
+        elif pending or not sessions:
+            status = "Pending registers"
+        elif confirmed * 100 >= len(sessions) * trainee.batch.minimum_percent:
+            status = "Eligible"
+        else:
+            status = "Below threshold"
+        context.update(
+            approval=approval, confirmed=confirmed, pending=pending, status=status,
+            sessions=[(session, "Present" if session.pk in marked else "Absent" if session.closed else "Pending")
+                      for session in sessions],
+        )
+    return render(request, "progress.html", context)
 
 
 @login_required
@@ -185,7 +206,7 @@ def live(request, batch_id=None):
                      "status":"Reconciliation required" if quarantined else "Approved" if approved else "Pending registers" if not sessions or len(closed)<len(sessions) else "Eligible" if eligible else "Below threshold"})
     return JsonResponse({"recovery_required": quarantined, "rows":rows,"sessions":[{"title":s.title,"closed":s.closed,
         "count":sum(sid==s.pk for sid,_ in marks)} for s in sessions] if batch_id else [
-        {"title":s.title,"status":"Present" if (s.pk,trainee.pk) in marks else "Absent" if s.closed else "Pending"} for s in sessions]})
+        {"title":s.title,"closed":s.closed,"status":"Present" if (s.pk,trainee.pk) in marks else "Absent" if s.closed else "Pending"} for s in sessions]})
 
 
 @coordinator_required

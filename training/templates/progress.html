@@ -1,1 +1,33 @@
-{% extends 'base.html' %}{% load static %}{% block content %}<h1>My attendance</h1><p>{{ trainee.name }} · {{ trainee.batch }} · {{ trainee.code }}</p><p>Certificate threshold: {{ trainee.batch.minimum_percent }}%</p><section id="live" data-feed="{% url 'my-data' %}"><p id="health" role="status"></p><div id="summary"></div><div id="counts"></div></section><a id="download" hidden href="{% url 'certificate' trainee.pk %}">Download my certificate (PDF)</a><script defer src="{% static 'live.js' %}"></script>{% endblock %}
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<h1>My attendance</h1>
+<p>{{ trainee.name }} · {{ trainee.batch }} · {{ trainee.code }}</p>
+<p>Certificate approval requires {{ trainee.batch.minimum_percent }}% attendance after all registers close.</p>
+<section id="live" data-feed="{% url 'my-data' %}" data-private-status="{{ status }}">
+  <p id="health" role="status"></p>
+  {% if recovery_required %}
+    <p>Attendance totals are under review.</p>
+  {% else %}
+    <div id="summary" class="panel">
+      <h2>Certificate progress</h2>
+      <p><strong id="confirmed-total">{{ confirmed }} of {{ sessions|length }} sessions confirmed</strong></p>
+      <p id="pending-total" {% if not pending %}hidden{% endif %}>{{ pending }} register{{ pending|pluralize }} still open</p>
+      <p>{% if status == 'Eligible' %}Eligible for coordinator review{% else %}{{ status }}{% endif %}</p>
+      {% if approval %}
+        <p>Certificate reference {{ approval.certificate_reference }}</p>
+        <a id="download" href="{% url 'certificate' trainee.pk %}">Download my certificate (PDF)</a>
+      {% endif %}
+    </div>
+    <h2>Sessions</h2>
+    <div id="counts">
+      {% for session, attendance in sessions %}
+        <div class="row"><span>{{ session.title }}</span><span>{{ attendance }}</span></div>
+      {% empty %}
+        <p>No sessions are scheduled.</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+<script defer src="{% static 'live.js' %}"></script>
+{% endblock %}

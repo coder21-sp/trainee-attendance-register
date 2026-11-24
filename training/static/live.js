@@ -1,5 +1,5 @@
 const live = document.querySelector('#live');
-const download = document.querySelector('#download');
+const privateStatus = live.dataset.privateStatus;
 let lastState;
 async function update() {
   try {
@@ -9,22 +9,46 @@ async function update() {
     const signature = JSON.stringify(data);
     // Review controls are rendered server-side; refresh them if approval or eligibility changes.
     const status = data.rows.map(r => [r.id,r.status].join('/')).join(',');
-    if (!download && lastState !== undefined && status !== lastState) {
+    if (privateStatus !== undefined ? data.rows[0].status !== privateStatus
+        : lastState !== undefined && status !== lastState) {
       location.reload();
       return;
     }
     lastState = status;
     if (signature !== live.dataset.snapshot) {
-      showRows('summary', data.rows.map(r => r.name + ' · ' + r.marked + '/' + r.total + ' marked · ' + r.status));
-      showRows('counts', data.sessions.map(s => s.title + ' · ' + (s.status ?? (s.count + ' present · ' + (s.closed ? 'Closed' : 'Attendance pending')))));
+      if (privateStatus !== undefined) {
+        if (!data.recovery_required) refreshProgress(data);
+      } else {
+        showRows('summary', data.rows.map(r => r.name + ' · ' + r.marked + '/' + r.total + ' marked · ' + r.status));
+        showRows('counts', data.sessions.map(s => s.title + ' · ' + (s.count + ' present · ' + (s.closed ? 'Closed' : 'Attendance pending'))));
+      }
       live.dataset.snapshot = signature;
     }
-    if (download) download.hidden = data.rows[0].status !== 'Approved';
     document.querySelector('#health').textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch {
     document.querySelector('#health').textContent = 'Could not refresh. Retrying…';
   }
   setTimeout(update, 2000);
+}
+function refreshProgress(data) {
+  const row = data.rows[0];
+  document.getElementById('confirmed-total').textContent = `${row.attended} of ${row.total} sessions confirmed`;
+  const pending = data.sessions.filter(session => !session.closed).length;
+  const pendingTotal = document.getElementById('pending-total');
+  pendingTotal.hidden = pending === 0;
+  pendingTotal.textContent = `${pending} ${pending === 1 ? 'register' : 'registers'} still open`;
+  if (data.sessions.length) {
+    document.getElementById('counts').replaceChildren(...data.sessions.map(session => {
+      const row = document.createElement('div');
+      const title = document.createElement('span');
+      const status = document.createElement('span');
+      row.className = 'row';
+      title.textContent = session.title;
+      status.textContent = session.status;
+      row.append(title, status);
+      return row;
+    }));
+  }
 }
 function showRows(id, lines) {
   document.getElementById(id).replaceChildren(...lines.map(line => {

@@ -5,3 +5,43 @@
 .audit-table{overflow-x:auto}.audit-table table{border-collapse:collapse;width:100%}.audit-table th,.audit-table td{text-align:left;vertical-align:top;padding:.55rem;border-bottom:1px solid #ddd}
 
 .audit-export{display:inline-block;background:#0a6155;color:white;padding:.4rem .8rem;border-radius:.4rem;text-decoration:none}
+
+:focus-visible {
+  outline: 3px solid #b56c08;
+  outline-offset: 3px;
+}
+.panel h2 { margin-top: 0; }
+select {
+  display: block;
+  width: 100%;
+  max-width: 25rem;
+  margin: .3rem 0 .8rem;
+  padding: .65rem;
+  border: 1px solid #8caba5;
+  border-radius: .35rem;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.register-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+#camera:empty { margin: 0; }
+#entry video { margin-top: 1rem; border-radius: .35rem; }
+button:disabled { opacity: .65; cursor: wait; }
+summary { cursor: pointer; }
+.review-filters:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: .5rem 1rem;
+}
+.review-filters :is(input, select) { max-width: none; }
+#review-results { grid-column: 1 / -1; margin: 0; }
+.row[hidden] { display: none; }
+@media (max-width: 32rem) {
+  main { padding-block: 1rem; }
+  .register-actions button { flex: 1 0 100%; }
+  .panel input:not([type=checkbox]), .panel select { max-width: none; }
+}
