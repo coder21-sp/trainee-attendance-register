@@ -11,6 +11,7 @@ import qrcode.image.svg
 import uuid
 
 from .models import Approval, Attendance, Batch, Session, Trainee
+from .certificates import render_certificate
 
 coordinator = user_passes_test(lambda user: user.is_superuser)
 
@@ -113,7 +114,7 @@ def approve(request, pk):
     if override and (not details or result["eligible"] or result["pending"] or not result["total"]):
         messages.error(request, "Overrides require closed registers, below-threshold attendance and a selected reason.")
     elif result["eligible"] or override:
-        _, created = Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent))
+        _, created = Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent, approval_method="override" if override else "standard", snapshot_origin="original"))
         if created and override:
             record(request.user, trainee, f"Certificate override ({result['attended']}/{result['total']}, threshold {trainee.batch.minimum_percent}%)", details)
         messages.success(request,"Certificate approval recorded.")
@@ -171,22 +172,9 @@ def id_pass(request, pk):
 
 @login_required
 def certificate(request, pk):
-    from reportlab.pdfgen.canvas import Canvas
-    from reportlab.lib.pagesizes import A4, landscape
     approval = get_object_or_404(Approval.objects.select_related("trainee__batch","reviewer"), trainee_id=pk)
     if not request.user.is_superuser and approval.trainee.account_id != request.user.pk:
         return HttpResponse(status=403)
-    response = HttpResponse(content_type="application/pdf")
+    response = HttpResponse(render_certificate(approval), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="training-certificate-{pk}.pdf"'
-    pdf = Canvas(response,pagesize=landscape(A4))
-    mid = landscape(A4)[0]/2
-    for size, y, line in [
-        (14,495,"TRAINING REGISTER"), (32,420,"Certificate of Attendance"),
-        (22,335,approval.trainee.name), (17,286,str(approval.trainee.batch)),
-        (13,232,f"Verified attendance: {approval.attended} of {approval.total} sessions"),
-        (12,155,f"Approved by {approval.reviewer.username} on {approval.approved_at.date()}"),
-        (11,100,f"Register reference TR-{approval.pk:06d}")]:
-        pdf.setFont("Helvetica",size)
-        pdf.drawCentredString(mid,y,line)
-    pdf.save()
     return response

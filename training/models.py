@@ -55,6 +55,25 @@ class Approval(models.Model):
     attended = models.PositiveIntegerField()
     total = models.PositiveIntegerField()
     threshold = models.PositiveSmallIntegerField()
+    trainee_name = models.CharField(max_length=100, default="", editable=False)
+    trainee_code = models.CharField(max_length=50, default="", editable=False)
+    batch_name = models.CharField(max_length=100, default="", editable=False)
+    reviewer_name = models.CharField(max_length=150, default="", editable=False)
+    approval_method = models.CharField(max_length=16, default="legacy_unknown", editable=False)
+    snapshot_origin = models.CharField(max_length=16, default="reconstructed", editable=False)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.trainee_name = self.trainee.name
+            self.trainee_code = self.trainee.code
+            self.batch_name = self.trainee.batch.name
+            self.reviewer_name = self.reviewer.username
+        super().save(*args, **kwargs)
+
+    @property
+    def certificate_reference(self):
+        return f"TR-{self.pk:06d}"
+
 
     class Meta:
         constraints = [
