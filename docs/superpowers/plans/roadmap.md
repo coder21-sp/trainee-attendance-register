@@ -9,9 +9,9 @@
 
 - [x] Phase 1. Verified independent reconciliation, migrated restore and database write protection, and six concurrent workflows. Commits `ccbbf02` and `7d2e5c1` are on the feature branch.
 - [x] Phase 2. Verified least-privilege coordinator permissions, shared application/admin login throttling, production HTTPS defaults, and private response caching.
-- [ ] Phase 3. Add CI, regression coverage, and browser validation.
-- [ ] Phase 4. Improve coordinator, trainer, and trainee workflows and certificates. Verify desktop, mobile, and keyboard behavior.
-- [ ] Phase 5. Measure load, optimize bottlenecks, evaluate database options, and verify health checks and backup procedures.
+- [ ] Phase 3. GitHub Actions on Python 3.12 and 3.13 is verified. Browser verification is tracked below.
+- [x] Phase 4. Shipped server-rendered trainee progress, coordinator review controls and search, responsive trainer flows, and a certificate layout update in `f8861d3`.
+- [x] Phase 5. Measured and optimized the main endpoints, added polling backoff, verified health and backups, and documented SQLite operating limits and the PostgreSQL migration conditions.
 
 ## Recovery evidence contract
 
@@ -28,3 +28,10 @@ A fresh migrated SQLite database completed the restore and reconciliation drill 
 - The coordinator, login and HTTP security tests passed after their expected RED failures. The integrated suite passed 84 tests. The production deploy check reported W005 and W021 for the staged HSTS subdomain and preload policy.
 - `pip-audit 2.10.1` reported no known vulnerabilities in the eight pinned Python packages on 24 November 2026. The scan scope was the pinned Python requirements. The bundled jsQR file was outside that scan.
 - The setup administrator and host operator remain trusted. Login throttling does not track a username globally across distributed sources. Under reverse proxies, address isolation relies on the trusted server supplying the client address.
+
+## Quality, workflows, and operations
+
+- Phase 2 commit `fe7bfd9` is on the feature branch. Regression CI was added in `df010ec`; its first submission failed workflow validation. The corrected `f63415c` run succeeded on GitHub Actions (run 45357721413) after local actionlint verification.
+- The exact staged Phase 4 snapshot passed all 91 Django tests in 8.538 seconds. Certificate reference and historical snapshot fields are retained. Dates display in the register timezone.
+- The same-template synthetic benchmark reduced coordinator review from 395 to seven SQL queries and from 187.78 ms to 23.90 ms median. Visible-tab polling drops from 30 to 12 scheduled requests per minute. The README records the other endpoints and measurement conditions.
+- A synthetic file-backed drill applied migrations through 0011, created a verified backup, restored to a separate file, and reconciled against the independent backup. The backup command rejects unrelated SQLite files. Readiness returns a generic 503 for quarantine or unavailable required database state. Production load testing and PostgreSQL compatibility remain outside the verified evidence.

@@ -6,9 +6,12 @@ from training import views
 from training.audit import audit_log
 from training.recovery import review_recovery
 from training.checkpoints import checkpoint
+from training.health import liveness, readiness
 from training.login_throttle import throttle_login
 
 urlpatterns = [
+    path("health/live/", liveness, name="health-live"),
+    path("health/ready/", readiness, name="health-ready"),
     path("recovery/review/", review_recovery, name="recovery-review"),
     path("audit/checkpoint/", checkpoint, name="checkpoint"),
     path("audit/", audit_log, name="audit"),

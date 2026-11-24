@@ -166,6 +166,7 @@ class RecoveryLockTests(TestCase):
                 with self.assertRaisesMessage(CommandError, "Training database schema differs"):
                     call_command("reconcile_recovery", str(evidence), **options)
                 db.execute(definition)
+                db.execute("UPDATE django_migrations SET applied = '2026-01-01 00:00:00'")
                 db.commit()
             original = evidence.read_bytes()
             call_command("reconcile_recovery", str(evidence), **options)

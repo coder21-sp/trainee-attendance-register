@@ -1,7 +1,15 @@
 const live = document.querySelector('#live');
 const privateStatus = live.dataset.privateStatus;
+const pollInterval = 5000;
+const maxRetryDelay = 60000;
 let lastState;
+let retryDelay = pollInterval;
+let pollTimer;
+let polling = false;
+
 async function update() {
+  if (document.hidden || polling) return;
+  polling = true;
   try {
     const response = await fetch(live.dataset.feed, {cache:'no-store'});
     if (!response.ok) throw new Error();
@@ -25,10 +33,14 @@ async function update() {
       live.dataset.snapshot = signature;
     }
     document.querySelector('#health').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    retryDelay = pollInterval;
   } catch {
     document.querySelector('#health').textContent = 'Could not refresh. Retrying…';
+    retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+  } finally {
+    polling = false;
   }
-  setTimeout(update, 2000);
+  if (!document.hidden) pollTimer = setTimeout(update, retryDelay);
 }
 function refreshProgress(data) {
   const row = data.rows[0];
@@ -57,4 +69,8 @@ function showRows(id, lines) {
     return p;
   }));
 }
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(pollTimer);
+  if (!document.hidden) update();
+});
 update();

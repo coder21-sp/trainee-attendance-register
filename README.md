@@ -12,7 +12,7 @@ flowchart LR
   D --> S[(Shared SQLite database)]
 ```
 
-The phone and desktop use the same server URL. Each trainer mark commits to a single register. Open coordinator review and trainee progress pages poll their authorized JSON feeds every two seconds. QR decoding runs locally on the phone with bundled jsQR. A badge identifies a trainee and an authenticated trainer confirms presence.
+The phone and desktop use the same server URL. Each trainer mark commits to a single register. Visible coordinator review and trainee progress pages poll authorized JSON feeds every five seconds. Hidden tabs pause polling, and failed requests back off to at most one minute. QR decoding runs locally on the phone with bundled jsQR. A badge identifies a trainee and an authenticated trainer confirms presence.
 
 ## Start locally
 
@@ -116,4 +116,37 @@ After a restore, the coordinator's **Review this restore** page shows the pendin
 
     python manage.py reconcile_recovery authoritative.sqlite3 --actor coordinator --note "Verified independently retained register snapshot"
 
-The command compares batches, roster, sessions, attendance, approvals and certificate snapshots, corrections, and identity and permission records. It excludes authentication session state and last-login timestamps. Successful verification appends the marker and evidence digests under the named active coordinator. Historical web reviews remain in the audit trail and require independent evidence to clear quarantine. If evidence differs or is unavailable, keep the candidate quarantined and prepare a fresh candidate from an intact authoritative source. Retain every source and any independently held audit receipts for review.
+The command compares the training schema, audit history, batches, roster, sessions, attendance, approvals and certificate snapshots, corrections, and identity and permission records. It excludes authentication session state and last-login timestamps. Successful verification appends the marker and evidence digests under the named active coordinator. Historical web reviews remain in the audit trail and require independent evidence to clear quarantine. If evidence differs or is unavailable, keep the candidate quarantined and prepare a fresh candidate from an intact authoritative source. Retain every source and any independently held audit receipts for review.
+
+## Operations
+
+### Health and monitoring
+
+- Request `/health/live/` without cookies to check that the application responds.
+- Request `/health/ready/` without cookies to check database access and recovery status. A 503 can mean the candidate is intentionally quarantined. Use liveness for restart decisions and investigate readiness separately.
+- Track HTTP 5xx rates, SQLite lock errors, request latency, available disk space, backup age, and the last successful restore drill. Keep names, credentials, badge values, and audit notes out of monitoring exports. Review web-server access logs before forwarding them.
+
+### Backups and rollback
+
+Set `DATABASE_PATH` to the intended SQLite source and back up to a new path on a filesystem that supports hard links.
+
+    python manage.py backup_register backups/register-2026-11-24.sqlite3
+
+The command uses SQLite's online backup API, includes committed WAL data, checks integrity and foreign keys, and publishes a new file without overwriting an existing one. Copy verified backups to encrypted, access-controlled storage independent of the application host. Keep the signing key separately protected. Agree on recovery point and recovery time objectives, schedule backup frequency and retention against them, and test restores regularly on isolated copies.
+
+Take a pre-migration backup at each release. Record the application commit, schema migration, backup identifier, and receipt. Run system and migration checks on a staged copy, then run the recovery drill and verify readiness before enabling writers. If a rollback is needed after a schema change, preserve the current database and newer audit receipts. Use the matching application version and an isolated restored candidate first. Treat any post-backup operational changes as evidence to reconcile before authorizing traffic.
+
+### SQLite capacity
+
+SQLite serializes register writes, and the integrity and quarantine triggers use SQLite SQL. Use a persistent local volume with one application host. Measure concurrent write latency and lock failures against the expected register traffic. Before moving to PostgreSQL, reproduce every constraint and trigger, audit and certificate immutability, recovery semantics and the concurrency suite on an isolated PostgreSQL database.
+
+Run the synthetic endpoint benchmark with `python manage.py test training.performance_benchmark`. The local fixture has 120 trainees, 24 sessions, 2,160 marks and 30 approvals. Ten requests per endpoint produced these medians:
+
+| Endpoint | SQL before → after | Median before → after |
+|---|---:|---:|
+| Home | 30 → 6 | 12.07 → 5.05 ms |
+| Coordinator review | 395 → 7 | 187.78 → 23.90 ms |
+| Coordinator feed | 7 → 7 | 24.59 → 8.41 ms |
+| Trainee feed | 8 → 6 | 4.89 → 3.11 ms |
+
+These timings use Django's local test client and synthetic SQLite data. Measure network and concurrent production-like latency separately.

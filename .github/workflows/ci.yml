@@ -39,3 +39,4 @@ jobs:
           for script in training/static/*.js; do
             node --check "$script" || exit 1
           done
+          node --test tests/live_polling.test.cjs

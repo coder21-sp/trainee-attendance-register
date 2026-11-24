@@ -53,6 +53,9 @@ def compare_evidence(candidate, evidence, marker):
             actual = candidate.execute(
                 f"SELECT {COLUMNS} FROM {TABLE} WHERE id < ? ORDER BY id", (marker.pk,),
             )
+        elif table == "django_migrations":
+            query = "SELECT app, name FROM django_migrations ORDER BY app, name"
+            expected, actual = evidence.execute(query), candidate.execute(query)
         else:
             schema = candidate.execute(f'PRAGMA table_info("{table}")').fetchall()
             if not schema or schema != evidence.execute(f'PRAGMA table_info("{table}")').fetchall():
@@ -60,12 +63,13 @@ def compare_evidence(candidate, evidence, marker):
             fields = ", ".join(f'"{column[1]}"' for column in schema if column[1] != "last_login")
             query = f'SELECT {fields} FROM "{table}" ORDER BY id'
             expected, actual = evidence.execute(query), candidate.execute(query)
-        for left, right in zip_longest(expected, actual):
-            if left != right:
-                if table == TABLE:
-                    raise CommandError("Evidence audit history differs from the retained history.")
-                raise CommandError(f"Operational evidence differs for {table}.")
-            digest.update(json.dumps(left, ensure_ascii=False, separators=(",", ":"), default=str).encode() + b"\n")
+        with closing(expected), closing(actual):
+            for left, right in zip_longest(expected, actual):
+                if left != right:
+                    if table == TABLE:
+                        raise CommandError("Evidence audit history differs from the retained history.")
+                    raise CommandError(f"Operational evidence differs for {table}.")
+                digest.update(json.dumps(left, ensure_ascii=False, separators=(",", ":"), default=str).encode() + b"\n")
     return digest.hexdigest()
 
 

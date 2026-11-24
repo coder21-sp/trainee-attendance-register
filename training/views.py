@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Count, Q, Value
 from .audit import REASONS, explanation, record_event
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -21,7 +22,7 @@ def home(request):
     if Trainee.objects.filter(account=request.user).exists():
         return redirect("progress")
     can_coordinate = is_coordinator(request.user)
-    sessions = Session.objects.select_related("batch").order_by("-date","id")
+    sessions = Session.objects.select_related("batch", "trainer").order_by("-date", "id")
     if not can_coordinate:
         sessions = sessions.filter(trainer=request.user)
     return render(request, "home.html", {"sessions": sessions, "batches": Batch.objects.all() if can_coordinate else []})
@@ -102,18 +103,50 @@ def register(request, pk):
     return render(request, "register.html", {"session":session, "reasons": REASONS, "marks":Attendance.objects.filter(session=session).select_related("trainee")})
 
 
+def evidence_summary(total, pending, attended, threshold):
+    return {
+        "total": total,
+        "pending": pending,
+        "attended": attended,
+        "eligible": total > 0 and pending == 0 and attended * 100 >= total * threshold,
+    }
+
+
+def session_counts(batch_id):
+    return Session.objects.filter(batch_id=batch_id).aggregate(
+        total=Count("pk"), pending=Count("pk", filter=Q(closed=False)),
+    )
+
+
+def attendance_counts_by_trainee(marks):
+    return marks.values("trainee_id").annotate(
+        marked=Count("pk"),
+        attended=Count("pk", filter=Q(session__closed=True)),
+    )
+
+
 def evidence(trainee):
-    sessions = Session.objects.filter(batch=trainee.batch)
-    total = sessions.count()
-    pending = sessions.filter(closed=False).count()
-    attended = Attendance.objects.filter(trainee=trainee, session__in=sessions.filter(closed=True)).count()
-    return dict(total=total, pending=pending, attended=attended, eligible=total>0 and pending==0 and attended*100>=total*trainee.batch.minimum_percent)
+    counts = session_counts(trainee.batch_id)
+    attended = Attendance.objects.filter(
+        trainee=trainee, session__batch_id=trainee.batch_id, session__closed=True,
+    ).count()
+    return evidence_summary(counts["total"], counts["pending"], attended, trainee.batch.minimum_percent)
 
 
 @coordinator_required
 def review(request, pk):
     batch = get_object_or_404(Batch, pk=pk)
-    rows = [(t,evidence(t)) for t in Trainee.objects.filter(batch=batch).select_related("batch","approval").order_by("name","code")]
+    counts = session_counts(batch.pk)
+    marks = Attendance.objects.filter(session__batch_id=batch.pk)
+    attendance = {row["trainee_id"]: row["attended"] for row in attendance_counts_by_trainee(marks)}
+    trainees = Trainee.objects.filter(batch=batch).select_related("approval__reviewer").order_by("name", "code")
+    rows = [
+        (trainee, evidence_summary(
+            counts["total"], counts["pending"], attendance.get(trainee.pk, 0),
+            batch.minimum_percent,
+        ))
+        for trainee in trainees
+    ]
     return render(request,"review.html",{"batch":batch,"rows":rows,"reasons":REASONS})
 
 
@@ -182,31 +215,81 @@ def progress(request):
 
 @login_required
 def live(request, batch_id=None):
-    from django.http import JsonResponse
-    if batch_id is None:
-        trainee = get_object_or_404(Trainee, account=request.user)
-        trainees = [trainee]
-        batch = trainee.batch
-    else:
-        if not is_coordinator(request.user):
-            return HttpResponse(status=403)
-        batch = get_object_or_404(Batch, pk=batch_id)
-        trainees = Trainee.objects.filter(batch=batch).select_related("batch","approval")
-    sessions = list(Session.objects.filter(batch=batch).order_by("date","pk"))
-    marks = set(Attendance.objects.filter(session__batch=batch).values_list("session_id","trainee_id"))
-    closed = {s.pk for s in sessions if s.closed}
-    rows = []
+    if batch_id is not None and not is_coordinator(request.user):
+        return HttpResponse(status=403)
     quarantined = recovery_requires_review()
-    for t in trainees:
-        attended = sum((sid,t.pk) in marks for sid in closed)
-        approved = hasattr(t,"approval")
-        eligible = bool(sessions) and len(closed)==len(sessions) and attended*100 >= len(sessions)*batch.minimum_percent
-        rows.append({"id":t.pk, "name":t.name, "code":t.code, "attended":attended,
-                     "marked":sum((s.pk,t.pk) in marks for s in sessions), "total":len(sessions),
-                     "status":"Reconciliation required" if quarantined else "Approved" if approved else "Pending registers" if not sessions or len(closed)<len(sessions) else "Eligible" if eligible else "Below threshold"})
-    return JsonResponse({"recovery_required": quarantined, "rows":rows,"sessions":[{"title":s.title,"closed":s.closed,
-        "count":sum(sid==s.pk for sid,_ in marks)} for s in sessions] if batch_id else [
-        {"title":s.title,"closed":s.closed,"status":"Present" if (s.pk,trainee.pk) in marks else "Absent" if s.closed else "Pending"} for s in sessions]})
+    if batch_id is None:
+        trainee = get_object_or_404(
+            Trainee.objects.select_related("batch", "approval"), account=request.user,
+        )
+        sessions = list(Session.objects.filter(batch_id=trainee.batch_id).order_by("date", "pk"))
+        marked_ids = set(Attendance.objects.filter(
+            trainee_id=trainee.pk, session__batch_id=trainee.batch_id,
+        ).values_list("session_id", flat=True))
+        pending = sum(not session.closed for session in sessions)
+        attended = sum(session.closed and session.pk in marked_ids for session in sessions)
+        rows = [live_row(trainee, len(sessions), pending, len(marked_ids), attended,
+                         trainee.batch.minimum_percent, quarantined)]
+        session_data = [
+            {"title": session.title, "closed": session.closed,
+             "status": "Present" if session.pk in marked_ids else "Absent" if session.closed else "Pending"}
+            for session in sessions
+        ]
+    else:
+        batch = get_object_or_404(Batch, pk=batch_id)
+        trainees = Trainee.objects.filter(batch_id=batch.pk).select_related("approval").order_by("pk")
+        sessions = list(Session.objects.filter(batch_id=batch.pk).order_by("date", "pk"))
+        attendance, session_marks = batch_mark_counts(batch.pk)
+        pending = sum(not session.closed for session in sessions)
+        rows = []
+        for trainee in trainees:
+            marked, attended = attendance.get(trainee.pk, (0, 0))
+            rows.append(live_row(
+                trainee, len(sessions), pending, marked, attended, batch.minimum_percent, quarantined,
+            ))
+        session_data = [
+            {"title": session.title, "closed": session.closed, "count": session_marks.get(session.pk, 0)}
+            for session in sessions
+        ]
+    return JsonResponse({"recovery_required": quarantined, "rows": rows, "sessions": session_data})
+
+
+def batch_mark_counts(batch_id):
+    marks = Attendance.objects.filter(session__batch_id=batch_id)
+    by_trainee = attendance_counts_by_trainee(marks).annotate(scope=Value("trainee"))
+    by_session = marks.values("session_id").annotate(
+        scope=Value("session"), marked=Count("pk"), attended=Value(0),
+    )
+    # Both breakdowns see the same attendance snapshot even if a scan posts mid-poll.
+    grouped = by_trainee.values_list("trainee_id", "scope", "marked", "attended").union(
+        by_session.values_list("session_id", "scope", "marked", "attended"), all=True,
+    )
+    attendance = {}
+    session_marks = {}
+    for key, scope, marked, attended in grouped:
+        if scope == "trainee":
+            attendance[key] = (marked, attended)
+        else:
+            session_marks[key] = marked
+    return attendance, session_marks
+
+
+def live_row(trainee, total, pending, marked, attended, threshold, quarantined):
+    summary = evidence_summary(total, pending, attended, threshold)
+    if quarantined:
+        status = "Reconciliation required"
+    elif hasattr(trainee, "approval"):
+        status = "Approved"
+    elif not total or pending:
+        status = "Pending registers"
+    elif summary["eligible"]:
+        status = "Eligible"
+    else:
+        status = "Below threshold"
+    return {
+        "id": trainee.pk, "name": trainee.name, "code": trainee.code, "attended": attended,
+        "marked": marked, "total": total, "status": status,
+    }
 
 
 @coordinator_required
