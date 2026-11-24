@@ -1,4 +1,5 @@
 """Run the Chromium workflow with manage.py test training.browser_checks."""
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -100,15 +101,55 @@ class RegisterBrowserTests(TestCase):
         correction.get_by_label("Reason").select_option("Roster Correction")
         correction.get_by_role("button", name="Record correction").click()
         expect(trainer.get_by_role("heading", name="Present (0)")).to_be_visible()
-        field.fill("WEB-1")
-        form.get_by_label("Reason").select_option("Network Error")
-        field.press("Enter")
+
+        coordinator = self.login("browser-coordinator")
+        badge = coordinator.request.get(self.base + "/badge/1/")
+        self.assertEqual(badge.status, 200)
+        trainer.evaluate("""svg => {
+            navigator.mediaDevices.getUserMedia = async () => {
+                const url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
+                const image = new Image();
+                try {
+                    image.src = url;
+                    await image.decode();
+                } finally {
+                    URL.revokeObjectURL(url);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 360;
+                const context = canvas.getContext('2d');
+                context.fillStyle = 'white';
+                context.fillRect(0, 0, 360, 360);
+                const stream = canvas.captureStream(30);
+                const [track] = stream.getVideoTracks();
+                function draw() {
+                    if (track.readyState === 'ended') return;
+                    context.drawImage(image, 30, 30, 300, 300);
+                    requestAnimationFrame(draw);
+                }
+                draw();
+                return stream;
+            };
+        }""", badge.text())
+        scan = trainer.get_by_role("button", name="Scan QR badge")
+        scan.click()
+        expect(trainer.locator("#camera")).to_have_text("First trainee: present.")
         expect(trainer.get_by_role("heading", name="Present (1)")).to_be_visible()
+        scan.click()
+        expect(trainer.locator("#camera")).to_contain_text("already marked")
+        expect(trainer.get_by_role("heading", name="Present (1)")).to_be_visible()
+        with closing(sqlite3.connect(self.database)) as database:
+            contexts = database.execute(
+                "SELECT context FROM training_auditentry WHERE reason = ?",
+                ("QR present mark",),
+            ).fetchall()
+        self.assertEqual(len(contexts), 1)
+        event = json.loads(contexts[0][0].split("\n", 1)[1])
+        self.assertEqual((event["action"], event["source"]), ("attendance_marked", "qr"))
         trainer.get_by_role("checkbox", name="I checked the roster", exact=False).check()
         trainer.get_by_role("button", name="Close register").click()
         expect(trainer.get_by_text("Register closed.", exact=True)).to_be_visible()
 
-        coordinator = self.login("browser-coordinator")
         coordinator.goto(self.base + "/review/1/")
         coordinator.get_by_label("Find a trainee").fill("WEB-1")
         expect(coordinator.get_by_text("Second trainee", exact=True)).to_be_hidden()
