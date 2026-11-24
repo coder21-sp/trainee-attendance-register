@@ -1,6 +1,8 @@
 """Prepare a restored SQLite database while preserving the current audit history."""
 from contextlib import closing
 import os
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -36,6 +38,16 @@ def snapshot(backup, current, output):
                     f"INSERT INTO {TABLE} ({COLUMNS}) VALUES (?,?,?,?,?,?,?,?)",
                     live.execute(query + " WHERE id > ? ORDER BY id", (last,)),
                 ).rowcount
+                # Every restored copy requires independent review, even when no
+                # later audit rows exist: legacy operational changes may be unaudited.
+                payload = {"version": 1, "action": "recovery_required", "source": "restore",
+                           "retained_event_count": appended, "backup_reference": Path(backup).name}
+                dest.execute(
+                    f"INSERT INTO {TABLE} (timestamp,trainee_name,context,actor,reason,note,seed_key) VALUES (?,?,?,?,?,?,?)",
+                    (datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" "),
+                     "(Entire register)", "Recovery required\n" + json.dumps(payload, separators=(",", ":")),
+                     "Restore command", "Recovery required", "Independent reconciliation required", None),
+                )
             if dest.execute("PRAGMA integrity_check").fetchone() != ("ok",):
                 raise CommandError("Restored database failed its integrity check.")
         os.chmod(stage, 0o600)
@@ -56,4 +68,4 @@ class Command(BaseCommand):
             count = snapshot(opts["backup"], opts["current"], opts["output"])
         except (sqlite3.Error, OSError) as exc:
             raise CommandError(f"Could not prepare restore: {exc}") from exc
-        self.stdout.write(f"Restore ready: {opts['output']} ({count} later audit entries retained).")
+        self.stdout.write(f"Restore ready: {opts['output']} ({count} later audit entries retained). Reconciliation required before use.")

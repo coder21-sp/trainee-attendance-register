@@ -1,7 +1,8 @@
 import secrets
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from training.recovery import recovery_requires_review
 from django.db import transaction
 from django.utils import timezone
 from training.models import Attendance, Batch, Trainee, Session
@@ -12,6 +13,8 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **kwargs):
+        if recovery_requires_review():
+            raise CommandError("Reconciliation required before seeding demo data.")
         def account(username, coordinator=False):
             user, created = get_user_model().objects.get_or_create(username=username)
             if created:

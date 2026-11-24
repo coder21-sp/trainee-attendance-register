@@ -3,6 +3,7 @@ from django import forms
 
 from .integrity import is_batch_locked, validate_batch_mutation
 from .models import Batch, Trainee, Session
+from .recovery import recovery_requires_review
 
 
 class BatchForm(forms.ModelForm):
@@ -37,7 +38,15 @@ class SessionForm(RosterForm):
 class LockedDeleteAdmin(admin.ModelAdmin):
     actions = None
 
+    def has_add_permission(self, request):
+        return not recovery_requires_review() and super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return not recovery_requires_review() and super().has_change_permission(request, obj)
+
     def has_delete_permission(self, request, obj=None):
+        if recovery_requires_review():
+            return False
         if obj is not None:
             batch_id = obj.pk if isinstance(obj, Batch) else obj.batch_id
             if is_batch_locked(batch_id):

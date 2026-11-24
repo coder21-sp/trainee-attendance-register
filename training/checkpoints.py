@@ -9,6 +9,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from .models import AuditEntry
+from .recovery import recovery_requires_review
 
 SALT = "training.audit.receipt.v1"
 
@@ -40,4 +41,4 @@ def checkpoint(request):
 
     if not matches:
         return JsonResponse({"error": "Audit history differs from the saved receipt. Preserve both copies and investigate before using this register."}, status=409)
-    return JsonResponse({"count": count, "receipt": signing.dumps([count, digest.hexdigest()], salt=SALT)})
+    return JsonResponse({"recovery_required": recovery_requires_review(), "count": count, "receipt": signing.dumps([count, digest.hexdigest()], salt=SALT)})

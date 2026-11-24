@@ -20,7 +20,7 @@ class RestoreTest(TestCase):
                 current.commit()
                 self.assertEqual(snapshot(old,live,output),1)
                 with closing(sqlite3.connect(output)) as restored:
-                    self.assertEqual(restored.execute("SELECT id,note FROM training_auditentry ORDER BY id").fetchall(),[(1,"Monday"),(2,"Tuesday")])
+                    self.assertEqual(restored.execute("SELECT id,note FROM training_auditentry WHERE id <= 2 ORDER BY id").fetchall(),[(1,"Monday"),(2,"Tuesday")])
                 with self.assertRaises(FileExistsError):
                     snapshot(old,live,output)
                 current.execute("UPDATE training_auditentry SET note='changed' WHERE id=1")

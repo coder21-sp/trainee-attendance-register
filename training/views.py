@@ -12,6 +12,7 @@ import uuid
 
 from .models import Approval, Attendance, Batch, Session, Trainee
 from .certificates import render_certificate
+from .recovery import recovery_requires_review, recovery_conflict
 
 coordinator = user_passes_test(lambda user: user.is_superuser)
 
@@ -31,6 +32,8 @@ def home(request):
 def register(request, pk):
     session = get_object_or_404(Session, pk=pk, **({} if request.user.is_superuser else {"trainer":request.user}))
     if request.method == "POST":
+        if recovery_requires_review():
+            return recovery_conflict()
         if request.POST.get("action") == "correct":
             trainee = get_object_or_404(Trainee, code=request.POST.get("code"), batch=session.batch)
             details = explanation(request.POST)
@@ -118,6 +121,8 @@ def review(request, pk):
 @require_POST
 @transaction.atomic
 def approve(request, pk):
+    if recovery_requires_review():
+        return recovery_conflict()
     trainee = get_object_or_404(Trainee,pk=pk)
     result = evidence(trainee)
     override = request.POST.get("action") == "override"
@@ -192,6 +197,8 @@ def certificate(request, pk):
     approval = get_object_or_404(Approval.objects.select_related("trainee__batch","reviewer"), trainee_id=pk)
     if not request.user.is_superuser and approval.trainee.account_id != request.user.pk:
         return HttpResponse(status=403)
+    if recovery_requires_review():
+        return recovery_conflict()
     response = HttpResponse(render_certificate(approval), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="training-certificate-{pk}.pdf"'
     return response
