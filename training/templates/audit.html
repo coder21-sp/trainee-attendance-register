@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<a href="/">← Dashboard</a><h1>Audit Log</h1>
+<a class="audit-export" href="{% url 'audit-csv' %}">Download Audit Log (CSV)</a>
+<div class="panel audit-table"><table><thead><tr>{% for header in headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead>
+<tbody>{% for row in rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% empty %}<tr><td colspan="6">No recorded changes.</td></tr>{% endfor %}</tbody></table></div>
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}
+{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}
+{% endblock %}

@@ -73,3 +73,15 @@ For hosting use a persistent volume for `DATABASE_PATH`, set `APP_ENV=production
     python manage.py test
 
 Tests cover role boundaries, repeat scans, correction history, pending registers, attendance thresholds, private trainee feeds and certificate downloads. Camera decoding uses jsQR 1.4.0; its license is included under training/static/vendor.
+
+## Manual attendance and audit review
+
+For a typed trainee ID, select **QR Camera Issue**, **Medical Leave**, **Official Plant Duty**, **Network Error**, or **Roster Correction**. Add a note of up to 240 characters if needed. Camera scanning submits the badge UUID through the scan path; the printed trainee ID is accepted only through manual entry. Badge possession is not proof that a physical camera was used.
+
+The assigned trainer or a coordinator can correct a register with a reason. Once every register is closed, a coordinator may expand **Below threshold · Review override**, document the exception and approve a certificate. The original attendance fraction stays on the certificate. Existing approvals lock subsequent corrections for that trainee.
+
+Open **Audit Log** on the coordinator dashboard for timestamp (IST), trainee, session/action, staff username and role, reason and note. **Download Audit Log (CSV)** exports the full history in the same order, including records beyond the current page. Spreadsheet formula prefixes are escaped. Two fictional manual entries are included by the demo command; reruns preserve them. Existing correction history is imported by the migration.
+
+Attendance changes, overrides and their audit inserts commit together. Historical entries store names, roles and session descriptions as snapshots. SQLite triggers block updates, deletes and replacement inserts, including ordinary direct SQL writes. A host administrator who can replace the database or drop triggers can still alter history. For independently verifiable retention, export to separately controlled immutable storage under the organization's retention policy.
+
+After pulling this version run `python manage.py migrate` and, for demo installations, `python manage.py demo`.

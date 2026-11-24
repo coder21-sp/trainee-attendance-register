@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q
+from .audit import REASONS, explanation, record
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -10,7 +10,7 @@ import qrcode
 import qrcode.image.svg
 import uuid
 
-from .models import Approval, Attendance, Batch, Correction, Session, Trainee
+from .models import Approval, Attendance, Batch, Session, Trainee
 
 coordinator = user_passes_test(lambda user: user.is_superuser)
 
@@ -28,16 +28,16 @@ def home(request):
 @login_required
 @transaction.atomic
 def register(request, pk):
-    session = get_object_or_404(Session, pk=pk, trainer=request.user)
+    session = get_object_or_404(Session, pk=pk, **({} if request.user.is_superuser else {"trainer":request.user}))
     if request.method == "POST":
         if request.POST.get("action") == "correct":
             trainee = get_object_or_404(Trainee, code=request.POST.get("code"), batch=session.batch)
-            reason = request.POST.get("reason", "").strip()
+            details = explanation(request.POST)
             present = request.POST.get("status") == "present"
             existing = Attendance.objects.filter(session=session, trainee=trainee)
             if Approval.objects.filter(trainee=trainee).exists():
                 messages.error(request, "This trainee already has a certificate approval.")
-            elif not reason or len(reason) > 240 or session.date > timezone.localdate():
+            elif not details or request.POST.get("status") not in {"present","absent"} or session.date > timezone.localdate():
                 messages.error(request, "Choose a current or past session and enter a correction reason.")
             elif existing.exists() == present:
                 messages.info(request, "Attendance already matches.")
@@ -46,7 +46,7 @@ def register(request, pk):
                     Attendance.objects.create(session=session, trainee=trainee)
                 else:
                     existing.delete()
-                Correction.objects.create(session=session, trainee=trainee, reviewer=request.user, present=present, reason=reason)
+                record(request.user, trainee, "Mark added" if present else "Mark removed", details, session)
                 messages.success(request, "Correction recorded.")
             return redirect("register", pk=pk)
         if session.closed or session.date > timezone.localdate():
@@ -57,16 +57,26 @@ def register(request, pk):
             messages.success(request, "Register closed. Unmarked trainees now count as absent.")
         else:
             value = request.POST.get("code","").strip()
-            lookup = Q(code=value)
-            try:
-                lookup |= Q(badge=uuid.UUID(value))
-            except ValueError:
-                pass
-            trainee = Trainee.objects.filter(lookup, batch=session.batch).first()
-            if trainee is None:
+            scanned = request.POST.get("source") == "scan"
+            details = explanation(request.POST)
+            trainee = None
+            if scanned:
+                try:
+                    badge_id = uuid.UUID(value)
+                except ValueError:
+                    badge_id = None
+                if badge_id:
+                    trainee = Trainee.objects.filter(badge=badge_id, batch=session.batch).first()
+            else:
+                trainee = Trainee.objects.filter(code=value, batch=session.batch).first()
+            if not scanned and not details:
+                messages.error(request, "Select a manual reason and keep the note within 240 characters.")
+            elif trainee is None:
                 messages.error(request, "Unknown ID for this batch.")
             else:
                 _, created = Attendance.objects.get_or_create(session=session, trainee=trainee)
+                if created and not scanned:
+                    record(request.user, trainee, "Manual present mark", details, session)
                 messages.success(request, f"{trainee.name}: " + ("present." if created else "already marked."))
         if request.headers.get("Accept") == "application/json":
             alerts = list(messages.get_messages(request))
@@ -74,7 +84,7 @@ def register(request, pk):
             return JsonResponse({"message": str(alerts[-1]) if alerts else "", "saved": not failed},
                                 status=400 if failed else 200)
         return redirect("register", pk=pk)
-    return render(request, "register.html", {"session":session, "corrections":Correction.objects.filter(session=session).select_related("trainee","reviewer"), "marks":Attendance.objects.filter(session=session).select_related("trainee")})
+    return render(request, "register.html", {"session":session, "reasons": REASONS, "marks":Attendance.objects.filter(session=session).select_related("trainee")})
 
 
 def evidence(trainee):
@@ -89,7 +99,7 @@ def evidence(trainee):
 def review(request, pk):
     batch = get_object_or_404(Batch, pk=pk)
     rows = [(t,evidence(t)) for t in Trainee.objects.filter(batch=batch).select_related("batch","approval").order_by("name","code")]
-    return render(request,"review.html",{"batch":batch,"rows":rows})
+    return render(request,"review.html",{"batch":batch,"rows":rows,"reasons":REASONS})
 
 
 @coordinator
@@ -98,8 +108,14 @@ def review(request, pk):
 def approve(request, pk):
     trainee = get_object_or_404(Trainee,pk=pk)
     result = evidence(trainee)
-    if result["eligible"]:
-        Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent))
+    override = request.POST.get("action") == "override"
+    details = explanation(request.POST)
+    if override and (not details or result["eligible"] or result["pending"] or not result["total"]):
+        messages.error(request, "Overrides require closed registers, below-threshold attendance and a selected reason.")
+    elif result["eligible"] or override:
+        _, created = Approval.objects.get_or_create(trainee=trainee, defaults=dict(reviewer=request.user, attended=result["attended"], total=result["total"], threshold=trainee.batch.minimum_percent))
+        if created and override:
+            record(request.user, trainee, f"Certificate override ({result['attended']}/{result['total']}, threshold {trainee.batch.minimum_percent}%)", details)
         messages.success(request,"Certificate approval recorded.")
     else:
         messages.error(request,"Attendance is pending or below this batch's threshold.")

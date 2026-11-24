@@ -43,3 +43,18 @@ class Command(BaseCommand):
         if created:
             Trainee.objects.create(batch=practice,name="Dev Rao",code="P-101",account=account("demo-live"))
             Session.objects.create(batch=practice,trainer=trainer,title="Practice workshop",date=today)
+
+        # Attribute two existing fictional marks without changing demo eligibility.
+        from training.models import AuditEntry
+        for code, title, reason, note in [
+            ("T-101", "Safety induction", "QR Camera Issue", "Badge checked at the induction desk."),
+            ("T-102", "Support desk", "Network Error", "Confirmed against the trainer's paper register."),
+        ]:
+            mark = Attendance.objects.filter(trainee__batch=batch, trainee__code=code,
+                                             session__title=title).select_related("trainee","session").first()
+            if mark:
+                AuditEntry.objects.get_or_create(seed_key=f"demo-manual-{code}", defaults={
+                    "timestamp":mark.recorded_at, "trainee_name":str(mark.trainee),
+                    "context":f"{batch} · {mark.session} · Manual present mark",
+                    "actor":f"{trainer.username} (Trainer)", "reason":reason, "note":note,
+                })

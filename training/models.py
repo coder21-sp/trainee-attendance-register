@@ -1,3 +1,4 @@
+from django.utils import timezone
 import uuid
 
 from django.conf import settings
@@ -60,3 +61,17 @@ class Correction(models.Model):
     present = models.BooleanField()
     reason = models.CharField(max_length=240)
     recorded_at = models.DateTimeField(auto_now_add=True)
+
+
+class AuditEntry(models.Model):
+    """Historical display values survive roster, batch and staff renames."""
+    timestamp = models.DateTimeField(default=timezone.now)
+    trainee_name = models.CharField(max_length=180)
+    context = models.TextField()
+    actor = models.CharField(max_length=180)
+    reason = models.CharField(max_length=40)
+    note = models.CharField(max_length=240, blank=True)
+    seed_key = models.CharField(max_length=60, unique=True, null=True)
+
+    class Meta:
+        ordering = ['-timestamp', '-pk']

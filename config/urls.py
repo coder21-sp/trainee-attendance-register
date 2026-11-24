@@ -3,7 +3,11 @@ from django.contrib.auth import views as auth
 from django.urls import path
 from training import views
 
+from training.audit import audit_log
+
 urlpatterns = [
+    path("audit/", audit_log, name="audit"),
+    path("audit/export.csv", audit_log, {"export":True}, name="audit-csv"),
     path('api/sessions/<int:pk>/attendance/', views.register, name='mark-api'),
     path('me/', views.progress, name='progress'),
     path('api/me/', views.live, name='my-data'),

@@ -21,8 +21,8 @@ async function scanBadge() {
       const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
       const code = jsQR(frame.data,frame.width,frame.height);
       if (code) {
-        document.querySelector('#code').value = code.data;
-        document.querySelector('#entry').requestSubmit();
+
+        await submitMark('scan', code.data);
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 180));
@@ -44,11 +44,17 @@ if (window.jsQR && navigator.mediaDevices?.getUserMedia) {
 const form = document.querySelector('#entry');
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  submitMark('manual', document.querySelector('#code').value);
+});
+async function submitMark(source, code) {
   if (form.dataset.busy) return;
   form.dataset.busy = 'true';
   try {
+    const data = new FormData(form);
+    data.set('source', source);
+    data.set('code', code);
     const response = await fetch(form.dataset.api, {
-      method: 'POST', body: new FormData(form), headers: {Accept:'application/json'}
+      method: 'POST', body: data, headers: {Accept:'application/json'}
     });
     const result = await response.json();
     if (!result.saved) {
@@ -63,7 +69,7 @@ form.addEventListener('submit', async event => {
   } finally {
     delete form.dataset.busy;
   }
-});
+}
 const lastMark = sessionStorage.getItem('lastMark');
 if (lastMark) {
   statusLine.textContent = lastMark;
