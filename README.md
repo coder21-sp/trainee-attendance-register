@@ -85,3 +85,9 @@ Open **Audit Log** on the coordinator dashboard for timestamp (IST), trainee, se
 Attendance changes, overrides and their audit inserts commit together. Historical entries store names, roles and session descriptions as snapshots. SQLite triggers block updates, deletes and replacement inserts, including ordinary direct SQL writes. A host administrator who can replace the database or drop triggers can still alter history. For independently verifiable retention, export to separately controlled immutable storage under the organization's retention policy.
 
 After pulling this version run `python manage.py migrate` and, for demo installations, `python manage.py demo`.
+
+### Detect a database rollback
+
+Opening **Audit Log** saves a signed SHA-256 receipt on that coordinator's browser. On later visits, the app compares the entire previously witnessed prefix, including row IDs, UTC timestamps and snapshot fields. Additional rows are allowed. Missing or changed witnessed rows produce a warning and the browser retains its earlier receipt. Receipts contain a count and digest, without trainee names or notes.
+
+Download the receipt after each review and retain the latest copy on an HR-controlled device. Upload it on the Audit Log page to verify history from another browser. Keep the production signing key stable and backed up separately. First use establishes a baseline. Changes made and lost between reviews are outside its coverage. Clearing browser storage removes its local baseline. A receipt detects differences and cannot recover missing data; maintain separately controlled backups for recovery. This check assumes trusted application code.

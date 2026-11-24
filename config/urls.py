@@ -4,8 +4,10 @@ from django.urls import path
 from training import views
 
 from training.audit import audit_log
+from training.checkpoints import checkpoint
 
 urlpatterns = [
+    path("audit/checkpoint/", checkpoint, name="checkpoint"),
     path("audit/", audit_log, name="audit"),
     path("audit/export.csv", audit_log, {"export":True}, name="audit-csv"),
     path('api/sessions/<int:pk>/attendance/', views.register, name='mark-api'),

@@ -1,5 +1,10 @@
-{% extends 'base.html' %}{% block content %}
+{% extends 'base.html' %}{% load static %}{% block content %}
 <a href="/">← Dashboard</a><h1>Audit Log</h1>
+<form id="checkpoint" data-url="{% url 'checkpoint' %}">{% csrf_token %}
+<p id="integrity" role="status">Checking saved audit receipt…</p>
+<button type="button" id="save-receipt" disabled>Download receipt</button>
+<label>Verify a previously saved receipt <input type="file" id="verify-receipt" accept=".txt,text/plain"></label>
+</form><script defer src="{% static 'checkpoint.js' %}"></script>
 <a class="audit-export" href="{% url 'audit-csv' %}">Download Audit Log (CSV)</a>
 <div class="panel audit-table"><table><thead><tr>{% for header in headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead>
 <tbody>{% for row in rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% empty %}<tr><td colspan="6">No recorded changes.</td></tr>{% endfor %}</tbody></table></div>

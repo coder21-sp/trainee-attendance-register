@@ -112,3 +112,20 @@ class RegisterFlow(TestCase):
         self.assertIn("(Coordinator)", AuditEntry.objects.first().actor)
         self.client.post(f"/approve/{live.pk}/", {"action":"override","reason":"Network Error"})
         self.assertFalse(Approval.objects.filter(trainee=live).exists())
+
+    def test_external_receipt_detects_rollback_and_rewrite(self):
+        from unittest.mock import patch
+        user = get_user_model().objects.create(username="review", is_superuser=True)
+        self.client.force_login(user)
+        url = "/audit/checkpoint/"
+        fields = dict(trainee_name="Test",context="Review",actor="Coordinator",reason="Medical Leave")
+        AuditEntry.objects.create(**fields)
+        receipt = self.client.post(url).json()["receipt"]
+        AuditEntry.objects.create(**fields)
+        self.assertEqual(self.client.post(url, {"receipt":receipt}).status_code, 200)
+        self.assertEqual(self.client.post(url, {"receipt":receipt+"x"}).status_code, 400)
+        with patch("training.checkpoints.AuditEntry.objects.order_by", return_value=AuditEntry.objects.none()):
+            self.assertEqual(self.client.post(url, {"receipt":receipt}).status_code, 409)
+        row = AuditEntry.objects.last()
+        with patch("training.checkpoints.AuditEntry.objects.order_by", return_value=AuditEntry.objects.exclude(pk=row.pk)):
+            self.assertEqual(self.client.post(url, {"receipt":receipt}).status_code, 409)
