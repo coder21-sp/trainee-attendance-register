@@ -147,7 +147,15 @@ def review(request, pk):
         ))
         for trainee in trainees
     ]
-    return render(request,"review.html",{"batch":batch,"rows":rows,"reasons":REASONS})
+    review_summary = {
+        "enrolled": len(rows),
+        "total": counts["total"],
+        "closed": counts["total"] - counts["pending"],
+        "eligible": sum(summary["eligible"] and not hasattr(trainee, "approval") for trainee, summary in rows),
+    }
+    return render(request, "review.html", {
+        "batch": batch, "reasons": REASONS, "review_summary": review_summary, "rows": rows,
+    })
 
 
 @coordinator_required

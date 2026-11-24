@@ -45,3 +45,78 @@ summary { cursor: pointer; }
   .register-actions button { flex: 1 0 100%; }
   .panel input:not([type=checkbox]), .panel select { max-width: none; }
 }
+
+/* Application shell and review layout shared with the approved plain-JavaScript preview. */
+:root {
+  --ink: #182e33;
+  --muted: #526966;
+  --paper: #f6f7f1;
+  --line: #d8e2d8;
+  --teal: #056356;
+  --deep: #103632;
+}
+body { background: var(--paper); color: var(--ink); font-family: 'Segoe UI', system-ui, sans-serif; }
+.app-frame { min-height: 100vh; display: grid; grid-template-columns: 223px minmax(0, 1fr); }
+.app-sidebar { background: var(--deep); color: white; padding: 31px 19px; display: flex; flex-direction: column; gap: 36px; }
+.app-brand { display: flex; align-items: center; gap: 11px; color: white; text-decoration: none; font-weight: 750; line-height: 1.15; }
+.app-brandmark { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 10px; background: #c8ecd3; color: var(--deep); }
+.app-nav { display: grid; gap: 5px; }
+.app-nav a { color: #d5e9df; text-decoration: none; padding: 10px 12px; border-radius: 8px; }
+.app-nav a:hover, .app-nav a[aria-current] { background: #26564c; color: white; }
+.app-account { margin-top: auto; padding-top: 16px; border-top: 1px solid #54776d; overflow-wrap: anywhere; }
+.app-account button { margin-top: 12px; background: #26564c; }
+main { min-width: 0; width: 100%; max-width: 1260px; padding: 30px clamp(18px, 4vw, 54px) 45px; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.7rem); letter-spacing: -.04em; overflow-wrap: anywhere; }
+.skip-link { position: absolute; left: 12px; top: -80px; background: white; padding: 12px; z-index: 10; }
+.skip-link:focus { top: 12px; }
+.page-back { font-size: .85rem; text-decoration: none; }
+.page-hero { margin: 22px 0 18px; padding: 25px 28px; background: linear-gradient(115deg, #e1f0e5, #f3f6e1); border: 1px solid #d6e6d8; border-radius: 17px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.page-hero h1 { margin: 0; }
+.page-hero p { color: #3f5751; margin: 9px 0 0; }
+.register-link { display: inline-block; border: 1px solid #b3c9bd; background: white; border-radius: 7px; color: #145a49; padding: 7px 11px; text-decoration: none; font-size: .85rem; font-weight: 650; }
+.register-link-primary { background: var(--teal); color: white; border-color: var(--teal); }
+.review-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 25px; }
+.review-metric { background: white; border: 1px solid var(--line); padding: 16px 18px; border-radius: 12px; }
+.review-metric span { font-size: .82rem; color: var(--muted); }
+.review-metric strong { display: block; font-size: 1.6rem; }
+.register-card { background: white; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 22px; overflow: hidden; }
+.register-card-head { padding: 19px; }
+.register-card-head h2 { margin: 0; font-size: 1.3rem; }
+.review-filters { margin-top: 12px; max-width: 680px; }
+.review-table-wrap { overflow-x: auto; }
+.review-table { width: 100%; border-collapse: collapse; text-align: left; }
+.review-table th, .review-table td { padding: 14px 16px; border-top: 1px solid #e4ebe5; vertical-align: top; }
+.review-table thead th { font-size: .78rem; background: #f9faf7; color: #4c6863; }
+.review-table tbody th { font-weight: normal; }
+.review-table tr[hidden] { display: none; }
+.review-secondary { font-size: .78rem; color: var(--muted); margin-top: 5px; }
+.attendance-meter { display: block; width: 84px; height: 12px; margin-top: 5px; }
+.review-pill { display: inline-block; border-radius: 99px; padding: 3px 8px; font-size: .75rem; font-weight: 700; }
+.review-pill-approved { background: #e2f4e8; color: #15553c; }
+.review-pill-pending { background: #edf1fb; color: #394f76; }
+.review-pill-below { background: #fff0d8; color: #6d4613; }
+.review-actions, .dashboard-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.review-override { width: 100%; }
+.review-override form { min-width: 180px; padding-top: 10px; }
+.review-results { padding: 12px 19px; margin: 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+.dashboard-rows { padding: 0 19px 16px; }
+.dashboard-row { border: 0; border-top: 1px solid var(--line); border-radius: 0; margin: 0; padding-inline: 0; text-decoration: none; }
+.live-details { padding: 16px 19px; }
+.live-details[hidden] { display: none; }
+@media (max-width: 760px) {
+  .app-frame { display: block; }
+  .app-sidebar { padding: 14px 18px; gap: 12px; }
+  .app-nav { display: flex; flex-wrap: wrap; }
+  .app-nav a { padding: 6px 10px; }
+  .app-account { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; }
+  .app-account button { margin: 0; }
+  .page-hero { padding: 18px; flex-direction: column; align-items: flex-start; }
+  .review-metric { padding: 10px; }
+  .review-metric strong { font-size: 1.25rem; }
+  .review-table { min-width: 600px; }
+}
+@media print {
+  .app-sidebar, .skip-link, .page-back, .review-filters, .review-actions { display: none; }
+  .app-frame { display: block; }
+  main { max-width: none; padding: 0; }
+}

@@ -1,6 +1,49 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Training register{% endblock %}</title><link rel="stylesheet" href="{% static 'register.css' %}"></head>
-<body><header><a href="/">Training register</a>{% if user.is_authenticated %}<form method="post" action="/logout/">{% csrf_token %}<button>Sign out</button></form>{% endif %}</header><main>
-{% if recovery_required %}<p role="alert" class="notice"><strong>Reconciliation required</strong> — restored records may be incomplete. Attendance, approvals and certificate downloads are locked. {% if perms.training.coordinate_register %}<a href="{% url 'recovery-review' %}">Review this restore</a>{% endif %}</p>{% endif %}
-{% for message in messages %}<p role="status" class="notice">{{ message }}</p>{% endfor %}
-{% block content %}{% endblock %}</main></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Training register{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'register.css' %}">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div class="app-frame{% if not user.is_authenticated %} app-frame-public{% endif %}">
+  <aside class="app-sidebar" aria-label="Training register">
+    <a class="app-brand" href="{% url 'home' %}">
+      <span class="app-brandmark" aria-hidden="true">✓</span>
+      <span>Training<br>register</span>
+    </a>
+    {% if user.is_authenticated %}
+      <nav class="app-nav" aria-label="Register">
+        {% if request.resolver_match.url_name == 'progress' %}
+          <a href="{% url 'progress' %}" aria-current="page">My attendance</a>
+        {% else %}
+          <a href="{% url 'home' %}"{% if request.resolver_match.url_name == 'home' %} aria-current="page"{% endif %}>Training sessions</a>
+          {% if perms.training.coordinate_register %}
+            {% if request.resolver_match.url_name == 'review' %}
+              <a href="#review-panel" aria-current="location">Certificate review</a>
+            {% else %}
+              <a href="{% url 'home' %}#certificate-review">Certificate review</a>
+            {% endif %}
+            <a href="{% url 'audit' %}"{% if request.resolver_match.url_name == 'audit' %} aria-current="page"{% endif %}>Audit log</a>
+            {% if user.is_staff %}<a href="{% url 'admin:index' %}">Manage register</a>{% endif %}
+          {% endif %}
+        {% endif %}
+      </nav>
+      <div class="app-account">
+        <strong>{{ user.get_username }}</strong>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
+      </div>
+    {% endif %}
+  </aside>
+  <main id="main-content">
+    {% if recovery_required %}
+      <p role="alert" class="notice"><strong>Reconciliation required</strong> &mdash; restored records may be incomplete. Attendance, approvals and certificate downloads are locked. {% if perms.training.coordinate_register %}<a href="{% url 'recovery-review' %}">Review this restore</a>{% endif %}</p>
+    {% endif %}
+    {% for message in messages %}<p role="status" class="notice">{{ message }}</p>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

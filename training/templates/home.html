@@ -1,5 +1,43 @@
-{% extends 'base.html' %}{% block content %}<h1>Training sessions</h1>
-{% if perms.training.coordinate_register %}<nav><a href="{% url 'audit' %}">Audit Log</a></nav>{% if user.is_staff %}<a href="{% url 'admin:index' %}">Manage batches, trainees and sessions</a>{% endif %}
-<h2>Certificate review</h2>{% for batch in batches %}<a class="row" href="{% url 'review' batch.pk %}">{{ batch }} <span>Review batch →</span></a>{% empty %}<p>No batches are available for review.</p>{% endfor %}{% endif %}
-<h2>Session registers</h2>{% for s in sessions %}<section class="row"><div><strong>{{ s.title }}</strong><p>{{ s.batch }} · {{ s.date }} · {{ s.trainer }}</p></div>
-{% if s.trainer_id == user.id or perms.training.coordinate_register %}<a href="{% url 'register' s.id %}">Open register</a>{% else %}<span>{% if s.closed %}Closed{% else %}Pending{% endif %}</span>{% endif %}</section>{% empty %}<p>No sessions assigned.</p>{% endfor %}{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Training sessions | Training register{% endblock %}
+{% block content %}
+<div class="page-hero">
+  <div>
+    <h1>Training sessions</h1>
+    <p>{% if perms.training.coordinate_register %}Open session registers or choose a batch for certificate review.{% else %}Open an assigned session to record or review attendance.{% endif %}</p>
+  </div>
+  <a class="register-link register-link-primary" href="#session-registers">Session registers</a>
+</div>
+
+{% if perms.training.coordinate_register %}
+  <section class="register-card" id="certificate-review" aria-labelledby="certificate-review-heading">
+    <div class="register-card-head"><h2 id="certificate-review-heading">Certificate review</h2></div>
+    <div class="dashboard-rows">
+      {% for batch in batches %}
+        <a class="row dashboard-row" href="{% url 'review' batch.pk %}"><strong>{{ batch }}</strong><span>Review batch &rarr;</span></a>
+      {% empty %}
+        <p>No batches are available for review.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<section class="register-card" id="session-registers" aria-labelledby="session-registers-heading">
+  <div class="register-card-head"><h2 id="session-registers-heading">Session registers</h2></div>
+  <div class="dashboard-rows">
+    {% for session in sessions %}
+      <div class="row dashboard-row">
+        <div><strong>{{ session.title }}</strong><p>{{ session.batch }} &middot; {{ session.date }} &middot; {{ session.trainer }}</p></div>
+        <div class="dashboard-actions">
+          <span class="review-pill {% if session.closed %}review-pill-approved{% else %}review-pill-pending{% endif %}">{% if session.closed %}Closed{% else %}Open{% endif %}</span>
+          {% if session.trainer_id == user.id or perms.training.coordinate_register %}
+            <a class="register-link" href="{% url 'register' session.id %}">Open register</a>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <p>No sessions assigned.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

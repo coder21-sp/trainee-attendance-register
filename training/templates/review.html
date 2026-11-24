@@ -1,72 +1,133 @@
 {% extends 'base.html' %}
 {% load static %}
+{% block title %}{{ batch }} review | Training register{% endblock %}
 {% block content %}
-<a href="/">← Batches</a>
-<h1>{{ batch }} review</h1>
-<p>Approval requires {{ batch.minimum_percent }}% attendance and all registers closed. Counts below show confirmed attendance in closed registers out of all planned sessions.</p>
-<section data-feed="{% url 'batch-data' batch.pk %}" id="live">
-  <h2>Live attendance</h2>
+<a class="page-back" href="{% url 'home' %}#certificate-review">&larr; All batches</a>
+<div class="page-hero">
+  <div>
+    <h1>{{ batch }} review</h1>
+    <p>Approval requires {{ batch.minimum_percent }}% attendance and all registers closed.</p>
+  </div>
+  <a class="register-link register-link-primary" href="#review-panel">Review trainees</a>
+</div>
+
+{% if not recovery_required %}
+  <section class="review-metrics" aria-label="Batch summary">
+    <div class="review-metric">
+      <span>Trainees enrolled</span><strong id="review-enrolled">{{ review_summary.enrolled }}</strong>
+    </div>
+    <div class="review-metric">
+      <span>Registers closed</span><strong id="review-closed">{{ review_summary.closed }} of {{ review_summary.total }}</strong>
+    </div>
+    <div class="review-metric">
+      <span>Eligible for approval</span><strong id="eligible-count">{{ review_summary.eligible }}</strong>
+    </div>
+  </section>
+{% endif %}
+
+<section id="review-panel" class="register-card" aria-labelledby="review-title">
+  <div class="register-card-head">
+    <h2 id="review-title">Trainee review</h2>
+    {% if rows %}
+      <div id="review-filters" class="review-filters" hidden>
+        <div>
+          <label for="review-search">Find a trainee</label>
+          <input type="search" id="review-search" placeholder="Name or trainee ID" autocomplete="off">
+        </div>
+        {% if not recovery_required %}
+          <div>
+            <label for="review-status">Certificate status</label>
+            <select id="review-status">
+              <option value="">All statuses</option>
+              <option value="pending">Awaiting registers</option>
+              <option value="eligible">Eligible for approval</option>
+              <option value="below">Below threshold</option>
+              <option value="approved">Approved</option>
+            </select>
+          </div>
+        {% endif %}
+      </div>
+      <script defer src="{% static 'review.js' %}"></script>
+    {% endif %}
+  </div>
+  {% if rows %}
+    <div class="review-table-wrap" tabindex="0" role="region" aria-label="Trainee review table">
+      <table class="review-table">
+        <thead>
+          <tr>
+            <th scope="col">Trainee</th>
+            <th scope="col">Attendance</th>
+            <th scope="col">Certificate</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t,r in rows %}
+          <tr data-review-trainee="{{ t.name }} {{ t.code }}"
+              data-review-status="{% if recovery_required %}recovery{% elif t.approval %}approved{% elif r.eligible %}eligible{% elif r.pending or not r.total %}pending{% else %}below{% endif %}">
+            <th scope="row"><strong>{{ t.name }}</strong><div class="review-secondary">{{ t.code }}</div></th>
+            <td>
+              {% if recovery_required %}
+                <span>Under review</span>
+              {% else %}
+                <strong>{{ r.attended }}/{{ r.total }}</strong> confirmed
+                {% if r.total %}<meter class="attendance-meter" value="{{ r.attended }}" max="{{ r.total }}" aria-label="Confirmed attendance"></meter>{% endif %}
+                {% if r.pending %}<div class="review-secondary">{{ r.pending }} pending</div>{% endif %}
+              {% endif %}
+            </td>
+            <td>
+              {% if recovery_required %}
+                <span class="review-pill review-pill-pending">Under review</span>
+              {% elif t.approval %}
+                <span class="review-pill review-pill-approved">Approved</span>
+                <div class="review-secondary">Approved by {{ t.approval.reviewer }} &middot; {{ t.approval.attended }}/{{ t.approval.total }} at approval</div>
+              {% elif r.eligible %}
+                <span class="review-pill review-pill-approved">Eligible</span>
+              {% elif r.pending or not r.total %}
+                <span class="review-pill review-pill-pending">Awaiting registers</span>
+              {% else %}
+                <span class="review-pill review-pill-below">Below threshold</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="review-actions">
+                <a class="register-link" href="{% url 'pass' t.pk %}">Print ID pass</a>
+                {% if not recovery_required %}
+                  {% if t.approval %}
+                    <a class="register-link register-link-primary" href="{% url 'certificate' t.pk %}">Download certificate</a>
+                  {% elif r.eligible %}
+                    <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
+                      <button class="register-link register-link-primary">Approve certificate</button>
+                    </form>
+                  {% elif r.total and not r.pending %}
+                    <details class="review-override">
+                      <summary>Review override</summary>
+                      <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
+                        <input type="hidden" name="action" value="override">
+                        {% include 'reason.html' %}
+                        <button class="register-link register-link-primary">Override and approve</button>
+                      </form>
+                    </details>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p id="review-results" class="review-results" role="status">{{ rows|length }} trainee{{ rows|length|pluralize }} shown</p>
+  {% else %}
+    <p class="review-results">No trainees enrolled.</p>
+  {% endif %}
+</section>
+
+<details class="register-card live-details" data-feed="{% url 'batch-data' batch.pk %}" id="live"{% if recovery_required %} hidden{% endif %}>
+  <summary>Live attendance</summary>
   <p id="health" role="status"></p>
   <div id="summary"></div>
   <div id="counts"></div>
-</section>
+</details>
 <script defer src="{% static 'live.js' %}"></script>
-
-<h2>Trainee review</h2>
-{% if rows %}
-  <div id="review-filters" class="panel review-filters" hidden>
-    <div>
-      <label for="review-search">Find a trainee</label>
-      <input type="search" id="review-search" placeholder="Name or trainee ID" autocomplete="off">
-    </div>
-    {% if not recovery_required %}
-      <div>
-        <label for="review-status">Certificate status</label>
-        <select id="review-status">
-          <option value="">All statuses</option>
-          <option value="pending">Awaiting registers</option>
-          <option value="eligible">Eligible for approval</option>
-          <option value="below">Below threshold</option>
-          <option value="approved">Approved</option>
-        </select>
-      </div>
-    {% endif %}
-    <p id="review-results" role="status"></p>
-  </div>
-  <script defer src="{% static 'review.js' %}"></script>
-{% endif %}
-
-{% for t,r in rows %}
-  <section class="row" data-review-trainee="{{ t.name }} {{ t.code }}"
-           data-review-status="{% if recovery_required %}recovery{% elif t.approval %}approved{% elif r.eligible %}eligible{% elif r.pending or not r.total %}pending{% else %}below{% endif %}">
-    <div>
-      <strong>{{ t.name }}</strong>
-      <p>{{ t.code }} · {{ r.attended }}/{{ r.total }} sessions · {{ r.pending }} pending</p>
-      <a href="{% url 'pass' t.pk %}">Print ID pass</a>
-    </div>
-    {% if recovery_required %}
-      <span>Attendance under review</span>
-    {% elif t.approval %}
-      <a href="{% url 'certificate' t.pk %}">Download certificate</a>
-      <span>Approved by {{ t.approval.reviewer }} · {{ t.approval.attended }}/{{ t.approval.total }} at approval</span>
-    {% elif r.eligible %}
-      <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
-        <button>Approve certificate</button>
-      </form>
-    {% elif r.pending or not r.total %}
-      <span>Awaiting registers</span>
-    {% else %}
-      <details>
-        <summary>Below threshold · Review override</summary>
-        <form method="post" action="{% url 'approve' t.pk %}">{% csrf_token %}
-          <input type="hidden" name="action" value="override">
-          {% include 'reason.html' %}
-          <button>Override and approve</button>
-        </form>
-      </details>
-    {% endif %}
-  </section>
-{% empty %}
-  <p>No trainees enrolled.</p>
-{% endfor %}
 {% endblock %}

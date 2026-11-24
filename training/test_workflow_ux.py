@@ -79,3 +79,16 @@ class WorkflowRenderingTests(TestCase):
         self.assertContains(response, '<label for="review-search">Find a trainee</label>', html=True)
         self.assertContains(response, '<option value="pending">Awaiting registers</option>', html=True)
         self.assertContains(response, 'data-review-status="pending"')
+
+    def test_coordinator_review_uses_real_register_metrics_and_actions(self):
+        Session.objects.filter(pk=self.session.pk).update(closed=True)
+        self.client.force_login(self.coordinator)
+        response = self.client.get(reverse("review", args=[self.batch.pk]))
+
+        self.assertContains(response, '<strong id="review-enrolled">1</strong>', html=True)
+        self.assertContains(response, '<strong id="review-closed">1 of 1</strong>', html=True)
+        self.assertContains(response, '<strong id="eligible-count">1</strong>', html=True)
+        self.assertContains(response, '<th scope="col">Certificate</th>', html=True)
+        self.assertContains(response, reverse("approve", args=[self.trainee.pk]))
+        self.assertContains(response, reverse("pass", args=[self.trainee.pk]))
+        self.assertNotContains(response, "Asha Rao")
