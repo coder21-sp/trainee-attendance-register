@@ -91,3 +91,13 @@ After pulling this version run `python manage.py migrate` and, for demo installa
 Opening **Audit Log** saves a signed SHA-256 receipt on that coordinator's browser. On later visits, the app compares the entire previously witnessed prefix, including row IDs, UTC timestamps and snapshot fields. Additional rows are allowed. Missing or changed witnessed rows produce a warning and the browser retains its earlier receipt. Receipts contain a count and digest, without trainee names or notes.
 
 Download the receipt after each review and retain the latest copy on an HR-controlled device. Upload it on the Audit Log page to verify history from another browser. Keep the production signing key stable and backed up separately. First use establishes a baseline. Changes made and lost between reviews are outside its coverage. Clearing browser storage removes its local baseline. A receipt detects differences and cannot recover missing data; maintain separately controlled backups for recovery. This check assumes trusted application code.
+
+### Restore Monday's backup and keep Tuesday's audit entries
+
+Stop application writers before the final recovery. Keep both the current SQLite database and a consistent SQLite backup from the same installation. Both must contain the audit table. From the project directory:
+
+    python manage.py restore_with_audit backups/monday.sqlite3 recovered.sqlite3
+
+The command copies Monday's database to a new file, verifies that its audit history matches the beginning of the current database's history, and appends every later audit row with its original ID, timestamp and staff attribution. The original files stay intact. A conflicting history or an existing output path stops the operation. To supply Tuesday's snapshot separately, add `--current backups/tuesday.sqlite3`.
+
+Start the app with `DATABASE_PATH` set to the absolute path of the recovered file, using the original signing key. Run pending migrations on that file if needed. Audit Log, CSV export and previously saved receipts all use the combined history. Other tables, including attendance marks and certificate approvals, reflect the chosen backup. If you also need Tuesday's operational state, use the intact Tuesday database. A receipt alone cannot reconstruct missing rows.
