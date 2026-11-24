@@ -6,6 +6,8 @@ import sqlite3
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command, CommandError
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -114,25 +116,53 @@ class RecoveryLockTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json().get("recovery_required", False))
 
-    def test_review_allows_next_mark_and_each_new_restore_relocks(self):
+    def test_web_attestation_cannot_release_quarantine(self):
         marker = AuditEntry.objects.get(reason="Recovery required")
         url = reverse("recovery-review")
         data = dict(marker=marker.pk, evidence="Signed Monday and Tuesday registers", reason="Counts match the operational records", verified="yes")
         self.client.force_login(self.trainer)
-        self.assertEqual(self.client.post(url,data).status_code,403)
+        self.assertEqual(self.client.get(url).status_code, 403)
         self.client.force_login(self.coordinator)
-        self.assertEqual(self.client.post(url,{**data,"reason":""}).status_code,400)
-        self.assertContains(self.client.get(url),"Evidence checked")
-        self.assertRedirects(self.client.post(url,data),reverse("audit"))
-        self.assertEqual(self.client.post(url,data).status_code,409)
-        entry = AuditEntry.objects.get(reason="Recovery reviewed")
-        self.assertIn(data["evidence"],entry.context)
-        self.assertIn(self.coordinator.username,entry.actor)
-        self.assertEqual(entry.note,data["reason"])
+        self.assertEqual(self.client.post(url, data).status_code, 405)
+        self.assertFalse(AuditEntry.objects.filter(reason="Recovery reviewed").exists())
         self.client.force_login(self.trainer)
-        self.client.post(self.route,{"source":"scan","code":str(self.trainee.badge)})
-        self.assertTrue(Attendance.objects.filter(session=self.session,trainee=self.trainee).exists())
-        AuditEntry.objects.create(reason="Recovery required",actor="Restore command",context="Later restore")
-        self.client.force_login(self.coordinator)
-        self.assertEqual(self.client.post(url,data).status_code,409)
-        self.assertEqual(self.client.post(self.route,{"action":"close"}).status_code,409)
+        response = self.client.post(self.route, {"source": "scan", "code": str(self.trainee.badge)})
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(Attendance.objects.exists())
+
+    def test_operator_requires_matching_independent_records(self):
+        marker = AuditEntry.objects.get(reason="Recovery required")
+        with TemporaryDirectory() as directory:
+            evidence = Path(directory) / "evidence.sqlite3"
+            # Copy the actual migrated schema and fixture rows in the test transaction.
+            with closing(sqlite3.connect(evidence)) as db:
+                dump = connection.connection.iterdump()
+                db.executescript("\n".join(
+                    line for line in dump
+                    if not line.startswith('INSERT INTO "training_auditentry"')
+                ))
+                db.execute("UPDATE training_batch SET name = 'Different roster'")
+                db.commit()
+                options = {"actor": self.coordinator.username, "note": "Verified independent copy"}
+                with self.assertRaisesMessage(CommandError, "Operational evidence differs"):
+                    call_command("reconcile_recovery", str(evidence), **options)
+                self.assertFalse(AuditEntry.objects.filter(reason="Recovery reconciled").exists())
+                db.execute("UPDATE training_batch SET name = ?", (self.batch.name,))
+                db.commit()
+            original = evidence.read_bytes()
+            call_command("reconcile_recovery", str(evidence), **options)
+            self.assertEqual(evidence.read_bytes(), original)
+            result = AuditEntry.objects.get(reason="Recovery reconciled")
+            payload = json.loads(result.context.split("\n", 1)[1])
+            self.assertEqual(payload["marker_id"], marker.pk)
+            self.assertEqual(payload["actor_id"], self.coordinator.pk)
+            self.assertEqual(len(payload["evidence_digest"]), 64)
+            self.assertEqual(result.note, options["note"])
+            self.assertEqual(self.client.post(self.route, {"action": "close"}).status_code, 302)
+            with self.assertRaisesMessage(CommandError, "No restore awaits review"):
+                call_command("reconcile_recovery", str(evidence), **options)
+
+    def test_legacy_attestation_does_not_clear_quarantine(self):
+        marker = AuditEntry.objects.get(reason="Recovery required")
+        AuditEntry.objects.create(reason="Recovery reviewed", seed_key=f"recovery-reviewed:{marker.pk}")
+        self.assertEqual(self.client.post(self.route, {"action": "close"}).status_code, 409)
