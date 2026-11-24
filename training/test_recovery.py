@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from .management.commands.restore_with_audit import snapshot
@@ -100,7 +101,7 @@ class RecoveryLockTests(TestCase):
         self.assertContains(response, "Reconciliation required", status_code=200)
 
     def test_admin_cannot_add_batch_during_recovery(self):
-        response = self.client.post("/admin/training/batch/add/",
+        response = self.client.post(reverse("admin:training_batch_add"),
                                     {"name": "Unsafe batch", "minimum_percent": 75, "_save": "Save"})
         self.assertIn(response.status_code, (403, 409))
         self.assertFalse(Batch.objects.filter(name="Unsafe batch").exists())
