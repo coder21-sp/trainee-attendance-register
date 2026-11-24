@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command, CommandError
-from django.db import connection
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -91,9 +91,7 @@ class RecoveryLockTests(TestCase):
         self.session.refresh_from_db()
         self.assertFalse(self.session.closed)
 
-    def test_approval_blocked_even_when_eligible(self):
-        Attendance.objects.create(trainee=self.trainee, session=self.session)
-        Session.objects.filter(pk=self.session.pk).update(closed=True)
+    def test_approval_blocked_during_quarantine(self):
         response = self.client.post(f"/approve/{self.trainee.pk}/")
         self.assertEqual(response.status_code, 409)
         self.assertFalse(Approval.objects.exists())
@@ -115,6 +113,20 @@ class RecoveryLockTests(TestCase):
         response = self.client.post("/audit/checkpoint/")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json().get("recovery_required", False))
+
+    def test_polling_reports_quarantine(self):
+        response = self.client.get(reverse("batch-data", args=[self.batch.pk]))
+        self.assertIs(response.json().get("recovery_required"), True)
+        self.assertEqual(response.json()["rows"][0]["status"], "Reconciliation required")
+
+    def test_database_blocks_operational_writes_during_quarantine(self):
+        with self.assertRaisesMessage(IntegrityError, "Recovery reconciliation required"), transaction.atomic():
+            Batch.objects.bulk_create([Batch(name="Unsafe batch")])
+        with self.assertRaisesMessage(IntegrityError, "Recovery reconciliation required"), transaction.atomic():
+            Trainee.objects.filter(pk=self.trainee.pk).update(name="Unsafe rename")
+        with self.assertRaisesMessage(IntegrityError, "Recovery reconciliation required"), transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM training_session WHERE id = %s", [self.session.pk])
 
     def test_web_attestation_cannot_release_quarantine(self):
         marker = AuditEntry.objects.get(reason="Recovery required")
@@ -148,6 +160,12 @@ class RecoveryLockTests(TestCase):
                     call_command("reconcile_recovery", str(evidence), **options)
                 self.assertFalse(AuditEntry.objects.filter(reason="Recovery reconciled").exists())
                 db.execute("UPDATE training_batch SET name = ?", (self.batch.name,))
+                definition = db.execute("SELECT sql FROM sqlite_schema WHERE name = 'quarantine_batch_insert'").fetchone()[0]
+                db.execute("DROP TRIGGER quarantine_batch_insert")
+                db.commit()
+                with self.assertRaisesMessage(CommandError, "Training database schema differs"):
+                    call_command("reconcile_recovery", str(evidence), **options)
+                db.execute(definition)
                 db.commit()
             original = evidence.read_bytes()
             call_command("reconcile_recovery", str(evidence), **options)
@@ -160,6 +178,10 @@ class RecoveryLockTests(TestCase):
             self.assertEqual(result.note, options["note"])
             self.assertEqual(self.client.post(self.route, {"action": "close"}).status_code, 302)
             with self.assertRaisesMessage(CommandError, "No restore awaits review"):
+                call_command("reconcile_recovery", str(evidence), **options)
+            AuditEntry.objects.create(reason="Recovery required", context="Malformed later restore")
+            self.assertEqual(self.client.post(self.route, {"action": "close"}).status_code, 409)
+            with self.assertRaisesMessage(CommandError, "Recovery marker is malformed"):
                 call_command("reconcile_recovery", str(evidence), **options)
 
     def test_legacy_attestation_does_not_clear_quarantine(self):

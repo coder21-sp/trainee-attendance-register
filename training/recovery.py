@@ -1,10 +1,10 @@
 """Keep recovered registers locked until a coordinator reviews the latest restore."""
 import hashlib
 import json
-import re
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
@@ -44,28 +44,16 @@ def marker_digest(marker):
 
 
 def pending_restore():
-    marker = AuditEntry.objects.filter(reason="Recovery required").order_by("-pk").first()
-    if marker is None or not valid_marker(marker):
-        return marker
-    result = AuditEntry.objects.filter(
-        seed_key=f"recovery-reconciled:{marker.pk}", reason=RECONCILED, pk__gt=marker.pk,
-    ).first()
-    if result:
-        payload = event_payload(result)
-        if (
-            payload.get("version") == 1
-            and payload.get("marker_id") == marker.pk
-            and payload.get("marker_digest") == marker_digest(marker)
-            and re.fullmatch(r"[0-9a-f]{64}", str(payload.get("evidence_digest", "")))
-            and type(payload.get("actor_id")) is int and payload["actor_id"] > 0
-            and result.note.strip()
-        ):
-            return None
-    return marker
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM training_pending_recovery")
+        row = cursor.fetchone()
+    return AuditEntry.objects.get(pk=row[0]) if row else None
 
 
 def recovery_requires_review():
-    return pending_restore() is not None
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT EXISTS (SELECT 1 FROM training_pending_recovery)")
+        return bool(cursor.fetchone()[0])
 
 
 def recovery_context(request):

@@ -175,14 +175,15 @@ def live(request, batch_id=None):
     marks = set(Attendance.objects.filter(session__batch=batch).values_list("session_id","trainee_id"))
     closed = {s.pk for s in sessions if s.closed}
     rows = []
+    quarantined = recovery_requires_review()
     for t in trainees:
         attended = sum((sid,t.pk) in marks for sid in closed)
         approved = hasattr(t,"approval")
         eligible = bool(sessions) and len(closed)==len(sessions) and attended*100 >= len(sessions)*batch.minimum_percent
         rows.append({"id":t.pk, "name":t.name, "code":t.code, "attended":attended,
                      "marked":sum((s.pk,t.pk) in marks for s in sessions), "total":len(sessions),
-                     "status":"Approved" if approved else "Pending registers" if not sessions or len(closed)<len(sessions) else "Eligible" if eligible else "Below threshold"})
-    return JsonResponse({"rows":rows,"sessions":[{"title":s.title,"closed":s.closed,
+                     "status":"Reconciliation required" if quarantined else "Approved" if approved else "Pending registers" if not sessions or len(closed)<len(sessions) else "Eligible" if eligible else "Below threshold"})
+    return JsonResponse({"recovery_required": quarantined, "rows":rows,"sessions":[{"title":s.title,"closed":s.closed,
         "count":sum(sid==s.pk for sid,_ in marks)} for s in sessions] if batch_id else [
         {"title":s.title,"status":"Present" if (s.pk,trainee.pk) in marks else "Absent" if s.closed else "Pending"} for s in sessions]})
 

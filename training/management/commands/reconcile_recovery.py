@@ -30,6 +30,21 @@ def compare_evidence(candidate, evidence, marker):
             raise CommandError("Database failed its integrity check.")
         if db.execute("PRAGMA foreign_key_check").fetchone():
             raise CommandError("Database contains invalid foreign keys.")
+    schema_query = """
+        SELECT type, name, tbl_name, sql FROM sqlite_schema
+        WHERE tbl_name GLOB 'training_*' ORDER BY type, name
+    """
+    training_schema = candidate.execute(schema_query).fetchall()
+    if training_schema != evidence.execute(schema_query).fetchall():
+        raise CommandError("Training database schema differs from independent evidence.")
+    digest.update(json.dumps(training_schema, ensure_ascii=False).encode() + b"\n")
+    unexpected_audit = candidate.execute(
+        f"""SELECT id FROM {TABLE} WHERE id > ?
+            AND (reason IS NOT 'Recovery reviewed' OR seed_key IS NOT ?) LIMIT 1""",
+        (marker.pk, f"recovery-reviewed:{marker.pk}"),
+    ).fetchone()
+    if unexpected_audit:
+        raise CommandError("Unexpected audit events exist after the recovery marker.")
     for table in (*OPERATIONAL_TABLES, TABLE):
         digest.update(table.encode() + b"\n")
         if table == TABLE:
@@ -91,6 +106,7 @@ class Command(BaseCommand):
         except (OSError, sqlite3.Error) as exc:
             raise CommandError("Could not read or validate SQLite evidence.") from exc
         payload = {"version": 1, "marker_id": marker.pk, "marker_digest": marker_digest(marker),
+                   "marker_context": marker.context,
                    "evidence_digest": digest, "actor_id": actor.pk}
         AuditEntry.objects.create(
             trainee_name="(Entire register)", actor=f"{actor.username} (Coordinator)",
