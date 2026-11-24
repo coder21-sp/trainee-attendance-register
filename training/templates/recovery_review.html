@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Review restored register</h1>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if marker %}
+<p>Restore #{{ marker.pk }} · {{ marker.timestamp }}</p>
+<pre>{{ marker.context }}</pre>
+<p>Compare attendance, session closures and approvals with an independent register or backup. Keep the register locked while discrepancies remain.</p>
+<a href="{% url 'audit' %}">Inspect audit log</a>
+<form method="post" class="panel">{% csrf_token %}
+<input type="hidden" name="marker" value="{{ marker.pk }}">
+<label>Evidence checked<input name="evidence" maxlength="240" required></label>
+<label>Reason for resuming operations<input name="reason" maxlength="240" required></label>
+<label><input type="checkbox" name="verified" value="yes" required> I reconciled the operational records and verified they are ready for use.</label>
+<button>Record decision and unlock</button></form>
+{% else %}<p>No restore awaits review.</p>{% endif %}
+{% endblock %}

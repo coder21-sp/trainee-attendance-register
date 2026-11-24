@@ -4,9 +4,11 @@ from django.urls import path
 from training import views
 
 from training.audit import audit_log
+from training.recovery import review_recovery
 from training.checkpoints import checkpoint
 
 urlpatterns = [
+    path("recovery/review/", review_recovery, name="recovery-review"),
     path("audit/checkpoint/", checkpoint, name="checkpoint"),
     path("audit/", audit_log, name="audit"),
     path("audit/export.csv", audit_log, {"export":True}, name="audit-csv"),
